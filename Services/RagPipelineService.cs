@@ -1,3 +1,4 @@
+using SyrianStudyBot.Domain;
 using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Services;
@@ -30,7 +31,7 @@ public class RagPipelineService(
 
         // Step 3: Combine all retrieved chunks into one context block
         // The LLM will use this as its "knowledge" to answer the question
-        var context = string.Join("\n\n---\n\n", chunks.Select(c => c.Content));
+        var context = BuildContextWithSources(chunks);
 
         // Step 4: Pick the right prompt template based on the mode
         var systemPrompt = BuildSystemPrompt(mode, context);
@@ -52,6 +53,13 @@ public class RagPipelineService(
             IMPORTANT: Never use LaTeX notation. Write equations in plain text only. For example write "F = m × a" not "\[ F = m \times a \]". Use × for multiplication, ÷ for division, ² for squared, ³ for cubed.
             """;
 
+        const string sourceRule = """
+            IMPORTANT: Use only the provided context.
+            IMPORTANT: At the end of every answer, include a Sources section.
+            IMPORTANT: Cite only sources that were actually used in the answer.
+            IMPORTANT: Cite sources using this exact format: - [SourceId] Book, page PageNumber.
+            IMPORTANT: If the answer is not found in the context, say that clearly and do not invent sources.
+            """;
 
         return mode switch
         {
@@ -62,6 +70,14 @@ public class RagPipelineService(
                 Base your summary ONLY on the context below.
                 If the answer is not in the context, say so clearly.
                 {languageRule}
+                {sourceRule}
+
+                Format:
+                Summary:
+                [your summary]
+
+                Sources:
+                - [S1] Book name, page 12
 
                 Context:
                 {context}
@@ -73,6 +89,8 @@ public class RagPipelineService(
                 Mark the correct answer clearly.
                 Do NOT use any knowledge outside the provided context.
                 If the context is insufficient, generate fewer questions and say so.
+                {languageRule}
+                {sourceRule}
 
                 Format each question as:
                 Q: [question]
@@ -82,7 +100,8 @@ public class RagPipelineService(
                 D) [option]
                 Answer: [letter]
 
-                {languageRule}
+                Sources:
+                - [S1] Book name, page 12
 
                 Context:
                 {context}
@@ -95,10 +114,42 @@ public class RagPipelineService(
                 Base your explanation ONLY on the context below.
                 If the answer is not in the context, say so clearly.
                 {languageRule}
+                {sourceRule}
+
+                Format:
+                Answer:
+                [your explanation]
+
+                Sources:
+                - [S1] Book name, page 12
 
                 Context:
                 {context}
                 """
         };
     }
+
+    private static string BuildContextWithSources(IReadOnlyList<DocumentChunk> chunks)
+    {
+        return string.Join(
+            "\n\n---\n\n",
+            chunks.Select((chunk, index) => $"""
+                SourceId: S{index + 1}
+                Book: {GetSourceName(chunk)}
+                Title: {chunk.Document.Title}
+                Subject: {chunk.Document.Subject}
+                Edition: {chunk.Document.Edition ?? "Unknown"}
+                Page: {chunk.PageNumber?.ToString() ?? "Unknown"}
+                Chapter: {chunk.ChapterTitle ?? "Unknown"}
+                Section: {chunk.SectionTitle ?? "Unknown"}
+
+                Content:
+                {chunk.Content}
+                """));
+    }
+
+    private static string GetSourceName(DocumentChunk chunk) =>
+        string.IsNullOrWhiteSpace(chunk.Document.SourceName)
+            ? chunk.Document.Title
+            : chunk.Document.SourceName;
 }

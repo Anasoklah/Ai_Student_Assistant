@@ -1,3 +1,4 @@
+using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Services;
@@ -149,7 +150,23 @@ public class TelegramCommandHandler(
         DocumentUpload upload,
         CancellationToken cancellationToken)
     {
-        var document = await ingestion.IngestAsync(upload.Title, upload.Subject, upload.Content, cancellationToken);
+        var request = new DocumentIngestionRequestDto
+        {
+            Title = upload.Title,
+            Subject = upload.Subject,
+            SourceName = upload.Title,
+            Language = "Unknown",
+            Pages =
+            [
+                new ExtractedPageDto
+                {
+                    PageNumber = 1,
+                    Text = upload.Content
+                }
+            ]
+        };
+
+        var document = await ingestion.IngestAsync(request, cancellationToken);
         return $"Document \"{document.Title}\" ingested successfully with {document.Chunks.Count} chunks.";
     }
 

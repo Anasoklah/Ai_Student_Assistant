@@ -1,8 +1,10 @@
+using SyrianStudyBot.Dtos;
+
 namespace SyrianStudyBot.interfaces;
 
 public interface IPdfTextExtractorService
 {
-    Task<string> ExtractTextAsync(
+    Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
         byte[] pdfBytes,
         bool forceVision,
         Func<Task> beforeVisionExtraction,

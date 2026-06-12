@@ -1,6 +1,7 @@
 using Pgvector;
 using SyrianStudyBot.Data;
 using SyrianStudyBot.Domain;
+using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Services;
@@ -18,43 +19,61 @@ public class DocumentIngestionService(
     // so context is not lost at chunk boundaries
     private const int ChunkOverlap = 20;
 
-    public async Task<Document> IngestAsync(string title, string subject, string rawText, CancellationToken cancellationToken = default)
+    public async Task<Document> IngestAsync(DocumentIngestionRequestDto requestDto, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Starting ingestion for document '{Title}' (subject: {Subject})", title, subject);
+        logger.LogInformation("Starting ingestion for document '{Title}' (subject: {Subject})", requestDto.Title, requestDto.Subject);
 
-        // Step 1: Split the raw text into overlapping chunks
-        var chunks = SplitIntoChunks(rawText);
-        logger.LogInformation("Split into {Count} chunks", chunks.Count);
-
-        // Step 2: Embed all chunks in one batch call (much faster than one-by-one)
-        var chunkTexts = chunks.Select(c => c.Text).ToList();
-        var embeddings = await embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
-        logger.LogInformation("Generated {Count} embeddings", embeddings.Count);
-
-        // Step 3: Build the Document record
+        // step 1: Create Document without Chuncks 
         var document = new Document
         {
-            Title = title,
-            Subject = subject
+            Title = requestDto.Title,
+            Subject = requestDto.Subject ,
+            SourceName = requestDto.SourceName ,
+            Edition = requestDto.Edition,
+            Language = requestDto.Language
         };
 
-        // Step 4: Build a DocumentChunk for each piece of text + its embedding
-        for (int i = 0; i < chunks.Count; i++)
+
+        // Step 2: Split the raw text into overlapping chunks
+        var chunks = requestDto.Pages 
+        .SelectMany(page => SplitIntoChunks(page.Text)
+        .Select(chunk => new PageChunk (
+            page.PageNumber,
+            chunk.Text ,
+            chunk.StartWord,
+            chunk.EndWord
+            ))).ToList();
+        logger.LogInformation("Split into {Count} chunks", chunks.Count);
+
+     
+        // step 3: take texts from each chunck to embed it 
+        var chunkTexts = chunks.Select(c => c.Text).ToList();
+
+        // Step 4: Embed all chunks in one batch call (much faster than one-by-one)
+        var embeddings = await embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
+        logger.LogInformation("Generated {Count} embeddings", embeddings.Count);
+    
+
+        //step 5: add Chunks to Document 
+        for (var i = 0; i < chunks.Count; i++)
         {
             document.Chunks.Add(new DocumentChunk
             {
                 ChunkIndex = i,
+                PageNumber = chunks[i].PageNumber,
+                StartWord = chunks[i].StartWord,
+                EndWord = chunks[i].EndWord,
                 Content = chunks[i].Text,
-                // Wrap the float[] in a Vector so pgvector can store it
                 Embedding = new Vector(embeddings[i])
             });
+            
         }
 
-        // Step 5: Save the document and all its chunks to the database in one transaction
+        // Step 6: Save the document and all its chunks to the database in one transaction
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("Saved document '{Title}' with {Count} chunks to database", title, document.Chunks.Count);
+        logger.LogInformation("Saved document '{Title}' with {Count} chunks to database", document.Title, document.Chunks.Count);
         return document;
     }
 
@@ -63,12 +82,12 @@ public class DocumentIngestionService(
     //   words: [A B C D E F G H]
     //   chunk1: [A B C D E]
     //   chunk2: [D E F G H]  ← starts 3 words back (overlap of D,E)
-    private static List<(string Text, int StartWord)> SplitIntoChunks(string text)
+    private static List<(string Text, int StartWord, int EndWord)> SplitIntoChunks(string text)
     {
         // Split into individual words, removing empty entries
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        var chunks = new List<(string Text, int StartWord)>();
+        var chunks = new List<(string Text, int StartWord, int EndWord)>();
         int step = ChunkSize - ChunkOverlap; // how far we advance each time
         int start = 0;
 
@@ -76,10 +95,16 @@ public class DocumentIngestionService(
         {
             int end = Math.Min(start + ChunkSize, words.Length);
             string chunkText = string.Join(' ', words[start..end]);
-            chunks.Add((chunkText, start));
+            chunks.Add((chunkText, start , end -1));
             start += step;
         }
 
         return chunks;
     }
+
+    private sealed record PageChunk(
+    int PageNumber,
+    string Text,
+    int StartWord,
+    int EndWord);
 }

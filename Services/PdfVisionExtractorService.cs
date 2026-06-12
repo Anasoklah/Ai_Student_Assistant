@@ -2,6 +2,7 @@ using System.ClientModel;
 using System.Diagnostics;
 using OpenAI;
 using OpenAI.Chat;
+using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Services;
@@ -29,7 +30,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
         _visionClient = client.GetChatClient(model);
     }
 
-    public async Task<string> ExtractTextAsync(byte[] pdfBytes, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ExtractedPageDto>> ExtractTextAsync(byte[] pdfBytes, CancellationToken cancellationToken = default)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"studybot_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
@@ -46,7 +47,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
             if (pageImages.Count == 0)
             {
                 _logger.LogWarning("pdftoppm produced no images — check that poppler-utils is installed");
-                return string.Empty;
+                throw new ArgumentNullException(nameof(pageImages) ,"pdf is empty");
             }
 
             if (pageImages.Count > MaxPages)
@@ -57,16 +58,20 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
 
             _logger.LogInformation("Vision extracting {Count} pages via LLM", pageImages.Count);
 
-            var pageTexts = new List<string>();
+            var pageTexts = new List<ExtractedPageDto>();
             for (int i = 0; i < pageImages.Count; i++)
             {
-                _logger.LogInformation("Processing page {Page}/{Total}", i + 1, pageImages.Count);
+                var pageNumber = i + 1;
+                _logger.LogInformation("Processing page {Page}/{Total}", pageNumber, pageImages.Count);
                 var text = await ExtractPageTextAsync(pageImages[i], cancellationToken);
                 if (!string.IsNullOrWhiteSpace(text))
-                    pageTexts.Add(text);
+                    pageTexts.Add(new ExtractedPageDto
+                    {
+                        PageNumber = pageNumber, Text = text
+                    });
             }
 
-            return string.Join("\n\n", pageTexts);
+            return pageTexts;
         }
         finally
         {
