@@ -1,4 +1,5 @@
 using System.Text;
+using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -41,15 +42,21 @@ public class TelegramDocumentUploadHandler(
         await botClient.SendMessage(chatId, "Downloading and processing your document, please wait...", cancellationToken: cancellationToken);
 
         var fileBytes = await DownloadTelegramFileAsync(botClient, document.FileId, cancellationToken);
-        var content = await ExtractUploadedContentAsync(fileBytes, fileKind, caption.ForceVision, chatId, botClient, cancellationToken);
+        var request = await BuildIngestionRequestAsync(
+            fileBytes,
+            fileKind,
+            caption,
+            chatId,
+            botClient,
+            cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(content))
+        if (request.Pages.Count == 0 || request.Pages.All(page => string.IsNullOrWhiteSpace(page.Text)))
         {
             await botClient.SendMessage(chatId, "Could not extract any text from the file.", cancellationToken: cancellationToken);
             return;
         }
 
-        var uploadedDocument = await ingestion.IngestAsync(caption.Title, caption.Subject, content, cancellationToken);
+        var uploadedDocument = await ingestion.IngestAsync(request, cancellationToken);
 
         await botClient.SendMessage(
             chatId,
@@ -147,23 +154,43 @@ public class TelegramDocumentUploadHandler(
         return stream.ToArray();
     }
 
-    private async Task<string> ExtractUploadedContentAsync(
+    private async Task<DocumentIngestionRequestDto> BuildIngestionRequestAsync(
         byte[] fileBytes,
         UploadedFileKind fileKind,
-        bool forceVision,
+        FileUploadCaption caption,
         long chatId,
         ITelegramBotClient botClient,
-        CancellationToken cancellationToken) =>
-        fileKind switch
+        CancellationToken cancellationToken)
+    {
+        var pages = fileKind switch
         {
-            UploadedFileKind.Pdf => await pdfTextExtractor.ExtractTextAsync(
+            UploadedFileKind.Pdf => await pdfTextExtractor.ExtractPagesAsync(
                 fileBytes,
-                forceVision,
+                caption.ForceVision,
                 () => NotifyVisionExtractionAsync(botClient, chatId, cancellationToken),
                 cancellationToken),
-            UploadedFileKind.Text => Encoding.UTF8.GetString(fileBytes),
-            _ => string.Empty,
+
+            UploadedFileKind.Text =>
+            [
+                new ExtractedPageDto
+                {
+                    PageNumber = 1,
+                    Text = Encoding.UTF8.GetString(fileBytes)
+                }
+            ],
+
+            _ => []
         };
+
+        return new DocumentIngestionRequestDto
+        {
+            Title = caption.Title,
+            Subject = caption.Subject,
+            SourceName = caption.Title,
+            Language = "Arabic",
+            Pages = pages
+        };
+    }
 
     private static Task NotifyVisionExtractionAsync(
         ITelegramBotClient botClient,

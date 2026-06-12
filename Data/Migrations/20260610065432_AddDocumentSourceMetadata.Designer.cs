@@ -3,6 +3,7 @@ using System;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -13,9 +14,11 @@ using SyrianStudyBot.Data;
 namespace SyrianStudyBot.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610065432_AddDocumentSourceMetadata")]
+    partial class AddDocumentSourceMetadata
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,7 +63,7 @@ namespace SyrianStudyBot.Data.Migrations
 
                     b.HasIndex("Subject");
 
-                    b.ToTable("Documents", (string)null);
+                    b.ToTable("Documents");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.DocumentChunk", b =>
@@ -109,7 +112,7 @@ namespace SyrianStudyBot.Data.Migrations
 
                     b.HasIndex("PageNumber");
 
-                    b.ToTable("DocumentChunks", (string)null);
+                    b.ToTable("DocumentChunks");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.QuizSession", b =>
@@ -138,7 +141,7 @@ namespace SyrianStudyBot.Data.Migrations
 
                     b.HasIndex("TelegramUserId");
 
-                    b.ToTable("QuizSessions", (string)null);
+                    b.ToTable("QuizSessions");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.UserSession", b =>
@@ -158,7 +161,7 @@ namespace SyrianStudyBot.Data.Migrations
 
                     b.HasKey("TelegramUserId");
 
-                    b.ToTable("UserSessions", (string)null);
+                    b.ToTable("UserSessions");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.DocumentChunk", b =>

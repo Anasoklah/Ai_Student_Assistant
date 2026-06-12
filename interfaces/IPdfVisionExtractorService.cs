@@ -1,6 +1,8 @@
+using SyrianStudyBot.Dtos;
+
 namespace SyrianStudyBot.interfaces;
 
 public interface IPdfVisionExtractorService
 {
-    Task<string> ExtractTextAsync(byte[] pdfBytes, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtractedPageDto>> ExtractTextAsync(byte[] pdfBytes, CancellationToken cancellationToken = default);
 }

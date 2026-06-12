@@ -1,3 +1,4 @@
+using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 using UglyToad.PdfPig;
 
@@ -9,33 +10,35 @@ public class PdfTextExtractorService(
 {
     private const int PdfTextFastPathMinCharacters = 200;
 
-    public async Task<string> ExtractTextAsync(
+    public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
         byte[] pdfBytes,
         bool forceVision,
         Func<Task> beforeVisionExtraction,
         CancellationToken cancellationToken = default)
     {
-        if (!forceVision)
-        {
-            var pdfText = ExtractTextWithPdfPig(pdfBytes);
-            if (pdfText.Length >= PdfTextFastPathMinCharacters)
-                return pdfText;
+        
+            var pages = ExtractPagesWithPdfPig(pdfBytes);
+            var totleCharacters = pages.Sum(page => page.Text.Length);
+            if (!forceVision &&  totleCharacters >= 200)
+                return pages;
 
             logger.LogInformation(
                 "PdfPig got only {Chars} chars. PDF is likely image-based, switching to vision",
-                pdfText.Length);
-        }
+                totleCharacters);
+        
 
         await beforeVisionExtraction();
         return await pdfVisionExtractor.ExtractTextAsync(pdfBytes, cancellationToken);
     }
+private static List<ExtractedPageDto> ExtractPagesWithPdfPig(byte[] bytes)
+{
+    using var pdf = PdfDocument.Open(bytes);
 
-    private static string ExtractTextWithPdfPig(byte[] bytes)
-    {
-        using var pdf = PdfDocument.Open(bytes);
-        var pages = pdf.GetPages()
-            .Select(page => string.Join(" ", page.GetWords().Select(word => word.Text)));
-
-        return string.Join("\n\n", pages);
-    }
+    return pdf.GetPages()
+        .Select(page => new ExtractedPageDto{
+            PageNumber = page.Number,
+            Text = string.Join(" ", page.GetWords().Select(word => word.Text))})
+        .Where(page => !string.IsNullOrWhiteSpace(page.Text))
+        .ToList();
+}
 }
