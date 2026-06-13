@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot;
 using SyrianStudyBot.Data;
+using SyrianStudyBot.GlobalExceptionHanndler;
 using SyrianStudyBot.interfaces;
 using SyrianStudyBot.Services;
 
@@ -14,6 +15,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         o => o.UseVector());
 });
 
+#region Exception Handler
+
+builder.Services.AddProblemDetails();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    
+#endregion
+
 // Controllers
 builder.Services.AddControllers();
 
@@ -22,6 +31,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Services
+#region Services
 builder.Services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
 builder.Services.AddSingleton<IPdfVisionExtractorService, PdfVisionExtractorService>();
 builder.Services.AddSingleton<IPdfTextExtractorService, PdfTextExtractorService>();
@@ -33,7 +43,7 @@ builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<ITelegramCommandHandler, TelegramCommandHandler>();
 builder.Services.AddScoped<ITelegramDocumentUploadHandler, TelegramDocumentUploadHandler>();
 builder.Services.AddScoped<IRagPipelineService, RagPipelineService>();
-
+#endregion
 // Chat Provider
 var chatProvider = builder.Configuration["ChatProvider"] ?? "Groq";
 
@@ -65,6 +75,9 @@ builder.Services.AddSingleton<IChatService>(_ =>
 builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
+
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
