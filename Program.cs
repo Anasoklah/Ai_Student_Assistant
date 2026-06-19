@@ -2,8 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot;
 using SyrianStudyBot.Data;
 using SyrianStudyBot.GlobalExceptionHanndler;
-using SyrianStudyBot.interfaces;
-using SyrianStudyBot.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,51 +31,19 @@ builder.Services.AddSwaggerGen();
 
 // Services
 #region Services
-builder.Services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
-builder.Services.AddSingleton<IPdfVisionExtractorService, PdfVisionExtractorService>();
-builder.Services.AddSingleton<IPdfTextExtractorService, PdfTextExtractorService>();
-builder.Services.AddSingleton<ITelegramUpdateHandler, TelegramUpdateHandler>();
+builder.Services.AddCoreServices();
+builder.Services.AddChatService();
+builder.Services.AddIdentityService();
+builder.Services.AddJwtService(builder.Configuration);
 
-builder.Services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
-builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
-builder.Services.AddScoped<IUserSessionService, UserSessionService>();
-builder.Services.AddScoped<ITelegramCommandHandler, TelegramCommandHandler>();
-builder.Services.AddScoped<ITelegramDocumentUploadHandler, TelegramDocumentUploadHandler>();
-builder.Services.AddScoped<IRagPipelineService, RagPipelineService>();
 #endregion
-// Chat Provider
-var chatProvider = builder.Configuration["ChatProvider"] ?? "Groq";
 
-builder.Services.AddSingleton<IChatService>(_ =>
-{
-    var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+// Chat Provider is handled in AddChatService
 
-    return chatProvider switch
-    {
-        "Gemini" => new GeminiChatService(
-            builder.Configuration,
-            loggerFactory.CreateLogger<GeminiChatService>()),
-
-        "DeepSeek" => new DeepSeekChatService(
-            builder.Configuration,
-            loggerFactory.CreateLogger<DeepSeekChatService>()),
-
-        "OpenRouter" => new OpenRouterChatService(
-            builder.Configuration,
-            loggerFactory.CreateLogger<OpenRouterChatService>()),
-
-        _ => new GroqChatService(
-            builder.Configuration,
-            loggerFactory.CreateLogger<GroqChatService>())
-    };
-});
-
-// Background Worker
-builder.Services.AddHostedService<Worker>();
+// Optional Telegram worker registration is available in AddTelegramServices().
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
 
 
 // Middleware Pipeline
@@ -85,6 +52,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseHttpsRedirection();
 

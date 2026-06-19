@@ -1,60 +1,36 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Domain;
+using SyrianStudyBot.Domain.Entities;
 
-namespace SyrianStudyBot.Data;
-
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext : IdentityDbContext <ApplicationUser , IdentityRole<Guid> , Guid>
 {
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    // Existing entities (updated)
     public DbSet<Document> Documents => Set<Document>();
-    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
-    public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();    
+    // Chat System
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+
+    // Quiz System
     public DbSet<QuizSession> QuizSessions => Set<QuizSession>();
+    public DbSet<QuizResult> QuizResults => Set<QuizResult>();
+
+    // Payments & Usage
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<DailyUsageLog> DailyUsageLogs => Set<DailyUsageLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
+        // Enable pgvector extension
         modelBuilder.HasPostgresExtension("vector");
 
-        modelBuilder.Entity<Document>(e =>
-        {
-            e.HasKey(d => d.Id);
-            e.Property(d => d.Title).IsRequired();
-            e.Property(d => d.Subject).IsRequired();
-            e.Property(d => d.SourceName).IsRequired();
-            e.Property(d => d.Edition).HasMaxLength(50);
-            e.Property(d => d.Language).HasMaxLength(20);
-            e.HasIndex(d => d.Subject);
-            e.HasIndex(d => d.SourceName);
-            e.HasMany(d => d.Chunks)
-                .WithOne(c => c.Document)
-                .HasForeignKey(c => c.DocumentId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<DocumentChunk>(e =>
-        {
-            e.HasKey(c => c.Id);
-            // nomic-embed-text produces 768-dimensional vectors
-            e.Property(c => c.Embedding).HasColumnType("vector(768)");
-            e.Property(c => c.Content).IsRequired();
-            e.Property(c => c.ChapterTitle).HasMaxLength(200);
-            e.Property(c => c.SectionTitle).HasMaxLength(200);
-            e.HasIndex(c => c.DocumentId);
-            e.HasIndex(c => c.PageNumber);
-        });
-
-        modelBuilder.Entity<UserSession>(e =>
-        {
-            e.HasKey(s => s.TelegramUserId);
-            // TelegramUserId comes from Telegram — never auto-generate it
-            e.Property(s => s.TelegramUserId).ValueGeneratedNever();
-        });
-
-        modelBuilder.Entity<QuizSession>(e =>
-        {
-            e.HasKey(q => q.Id);
-            e.Property(q => q.Questions).HasColumnType("jsonb");
-            e.Property(q => q.Answers).HasColumnType("jsonb");
-            e.HasIndex(q => q.TelegramUserId);
-        });
+        // Automatically applies all configurations from the executing assembly
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }
