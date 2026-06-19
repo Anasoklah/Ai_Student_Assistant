@@ -24,5 +24,10 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
             .WithOne(e => e.Document)
             .HasForeignKey(e => e.DocumentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.UploadedByUser)
+            .WithMany(e => e.UploadedDocuments)
+            .HasForeignKey(e => e.UploadedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

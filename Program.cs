@@ -33,8 +33,9 @@ builder.Services.AddSwaggerGen();
 #region Services
 builder.Services.AddCoreServices();
 builder.Services.AddChatService();
-// Optional: enable Telegram bot support only if needed
-// builder.Services.AddTelegramServices();
+builder.Services.AddIdentityService();
+builder.Services.AddJwtService(builder.Configuration);
+
 #endregion
 
 // Chat Provider is handled in AddChatService
@@ -43,7 +44,6 @@ builder.Services.AddChatService();
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
 
 
 // Middleware Pipeline
@@ -52,6 +52,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseHttpsRedirection();
 

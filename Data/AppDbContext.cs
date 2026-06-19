@@ -1,18 +1,16 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 
-public class AppDbContext : DbContext
+public class AppDbContext : IdentityDbContext <ApplicationUser , IdentityRole<Guid> , Guid>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     // Existing entities (updated)
     public DbSet<Document> Documents => Set<Document>();
-    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
-
-    // Users
-    public DbSet<User> Users => Set<User>();
-    
+    public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();    
     // Chat System
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();

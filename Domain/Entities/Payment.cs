@@ -6,7 +6,7 @@ public class Payment
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
-    public User User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 
     public SubscriptionTier TargetTier { get; set; }
     public decimal Amount { get; set; }  // In USD or equivalent

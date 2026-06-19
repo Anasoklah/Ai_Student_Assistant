@@ -3,9 +3,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Enums; // Adjusted to match your class namespace
 
-public class UserConfiguration : IEntityTypeConfiguration<User>
+public class UserConfiguration : IEntityTypeConfiguration<ApplicationUser>
 {
-    public void Configure(EntityTypeBuilder<User> builder)
+    public void Configure(EntityTypeBuilder<ApplicationUser> builder)
     {
         // ===================== KEYS & INDEXES =====================
         builder.HasKey(e => e.Id);
@@ -14,8 +14,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(e => e.SubscriptionTier);
         builder.HasIndex(e => e.LastMessageReset);
         
-        // Added standard lookup indexes for performance (optional but recommended)
-        builder.HasIndex(e => e.IsActive);
+        
         builder.HasIndex(e => e.GradeLevel);
 
         // ===================== PROPERTIES =====================
@@ -28,17 +27,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(200);
 
         builder.Property(e => e.PhoneNumber)
-            .HasMaxLength(50); // Typical standard for phone numbers including country codes
-
-        builder.Property(e => e.IsActive)
-            .HasDefaultValue(true);
+            .HasMaxLength(50); 
 
         builder.Property(e => e.CreatedAt)
             .IsRequired();
 
         // Profile
         builder.Property(e => e.GradeLevel)
-            .HasConversion<string>() // Stores enum as string, or remove this line to store as int
+            .HasConversion<string>() 
             .HasMaxLength(50);
 
         builder.Property(e => e.PreferredLanguage)
@@ -47,7 +43,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         // Subscription
         builder.Property(e => e.SubscriptionTier)
-            .HasConversion<string>() // Stores enum as string, or remove this line to store as int
+            .HasConversion<string>() 
             .HasMaxLength(50)
             .HasDefaultValue(SubscriptionTier.Free);
 
@@ -64,36 +60,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(e => e.LastUploadReset)
             .IsRequired();
 
-        // ===================== RELATIONSHIPS =====================
-        builder.HasMany(e => e.ChatSessions)
-            .WithOne(e => e.User)
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(e => e.UploadedDocuments)
-            .WithOne(e => e.UploadedByUser)
-            .HasForeignKey(e => e.UploadedByUserId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        builder.HasMany(e => e.Payments)
-            .WithOne(e => e.User)
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.HasMany(e => e.QuizResults)
-            .WithOne(e => e.User)
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // Explicitly defining the new structural link for QuizSessions if applicable
-        builder.HasMany(e => e.QuizSessions)
-            .WithOne() // Adjust .WithOne(q => q.User) if QuizSession has a navigation property back to User
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-            
-        builder.HasMany(e => e.DailyUsageLogs)
-            .WithOne() // Adjust .WithOne(d => d.User) if DailyUsageLog has a navigation property back to User
-            .HasForeignKey(e => e.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // User relationships are configured from the dependent entity configurations.
     }
 }

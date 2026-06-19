@@ -6,7 +6,7 @@ public class QuizSession
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
-    public User User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 
     public string? Subject { get; set; }
     public string? GradeLevel { get; set; }
@@ -20,4 +20,6 @@ public class QuizSession
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
+
+    public QuizResult? Result { get; set; }
 }

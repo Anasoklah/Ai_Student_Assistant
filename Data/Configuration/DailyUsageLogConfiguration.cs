@@ -11,5 +11,10 @@ public class DailyUsageLogConfiguration : IEntityTypeConfiguration<DailyUsageLog
         builder.HasIndex(e => e.Date);
 
         builder.Property(e => e.EstimatedCost).HasPrecision(18, 6);
+
+        builder.HasOne(e => e.User)
+            .WithMany(e => e.DailyUsageLogs)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
