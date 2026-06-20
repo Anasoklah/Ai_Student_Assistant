@@ -23,6 +23,9 @@ public class AppDbContext : IdentityDbContext <ApplicationUser , IdentityRole<Gu
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<DailyUsageLog> DailyUsageLogs => Set<DailyUsageLog>();
 
+    //Refresh Token 
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

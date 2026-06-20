@@ -37,4 +37,5 @@ public class ApplicationUser : IdentityUser<Guid>
     public List<QuizResult> QuizResults { get; set; } = [];
     public List<Payment> Payments { get; set; } = [];
     public List<DailyUsageLog> DailyUsageLogs { get; set; } = [];  
+    public List<RefreshToken> RefreshTokens {get;set;} = [];
 }

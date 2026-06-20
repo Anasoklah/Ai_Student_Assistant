@@ -41,9 +41,10 @@ public class GlobalExceptionHandler(
     private (int StatusCode , string title) MapException(Exception exception)
     => exception switch
     {
-        ArgumentException => (StatusCodes.Status400BadRequest , "Invalid Argument Provided"),
-        KeyNotFoundException => (StatusCodes.Status400BadRequest , "Key Not Found "),
+        ArgumentNullException => (StatusCodes.Status404NotFound , "Not Found "),
+        KeyNotFoundException => (StatusCodes.Status404NotFound , "Key Not Found "),
         UnauthorizedAccessException => (StatusCodes.Status401Unauthorized , "UnAuthorized "),
+        InvalidOperationException => (StatusCodes.Status400BadRequest , "invalid Operation"),
         _ => (StatusCodes.Status500InternalServerError , "An UnExpected Error Occured")
     };
 }

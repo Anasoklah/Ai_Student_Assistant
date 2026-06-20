@@ -1,0 +1,260 @@
+// Services/RefreshTokenService.cs
+using System.Security.Cryptography;
+using Authentication.interfaces;
+using Microsoft.EntityFrameworkCore;
+using SyrianStudyBot.Domain.Entities;
+using SyrianStudyBot.Dtos.auth.RefreshToken;
+using SyrianStudyBot.interfaces.Auth;
+
+
+namespace YourProject.Services;
+
+public class RefreshTokenService : IRefreshTokenService
+{
+    private readonly AppDbContext _context;
+    private readonly IJwtService _jwtService;
+    private readonly ILogger<RefreshTokenService> _logger;
+    private readonly RefreshTokenSettings _settings;
+
+    public RefreshTokenService(
+        AppDbContext context,
+        IJwtService jwtService,
+        ILogger<RefreshTokenService> logger,
+        IConfiguration configuration)
+    {
+        _context = context;
+        _jwtService = jwtService;
+        _logger = logger;
+        
+        _settings = new RefreshTokenSettings
+        {
+            ExpiresInDays = configuration.GetValue<int>("Jwt:RefreshTokenExpiresInDays", 7),
+            MaxActiveTokensPerUser = configuration.GetValue<int>("Jwt:MaxActiveTokensPerUser", 5)
+        };
+    }
+
+    public async Task<RefreshToken> CreateRefreshTokenAsync(
+        Guid userId, 
+        string? ipAddress = null,
+        int? expiresInDays = null)
+    {
+        // Generate a secure random token
+        var randomBytes = RandomNumberGenerator.GetBytes(64);
+        var token = Convert.ToBase64String(randomBytes);
+        
+        var refreshToken = new RefreshToken
+        {
+            Token = token,
+            UserId = userId,
+            ExpiresAt = DateTime.UtcNow.AddDays(expiresInDays ?? _settings.ExpiresInDays),
+            CreatedAt = DateTime.UtcNow,
+            CreatedByIp = ipAddress
+        };
+
+        // Enforce maximum active tokens per user (security measure)
+        await EnforceMaxTokensLimitAsync(userId);
+
+        _context.RefreshTokens.Add(refreshToken);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Created refresh token {TokenId} for user {UserId} from IP {IP}", 
+            refreshToken.Id, userId, ipAddress ?? "unknown");
+
+        return refreshToken;
+    }
+
+    public async Task<RefreshToken?> ValidateRefreshTokenAsync(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        var refreshToken = await _context.RefreshTokens
+            .Include(rt => rt.User)
+            .FirstOrDefaultAsync(rt => rt.Token == token);
+
+        if (refreshToken == null)
+        {
+            _logger.LogWarning("Refresh token not found in database");
+            return null;
+        }
+
+        // Check if token is active
+        if (!refreshToken.IsActive)
+        {
+            _logger.LogWarning(
+                "Refresh token {TokenId} is not active. Revoked: {Revoked}, Replaced: {Replaced}, Expired: {Expired}",
+                refreshToken.Id, refreshToken.IsRevoked, refreshToken.IsReplaced, refreshToken.IsExpired);
+            
+            // If a replaced token is being used, it might be a token reuse attack!
+            if (refreshToken.IsReplaced)
+            {
+                _logger.LogWarning(
+                    "Possible token reuse attack detected! Token {TokenId} was replaced but is being used again. Revoking all tokens for user {UserId}",
+                    refreshToken.Id, refreshToken.UserId);
+                await RevokeAllUserTokensAsync(refreshToken.UserId, "Possible token reuse attack");
+            }
+            
+            return null;
+        }
+
+        return refreshToken;
+    }
+
+    public async Task<TokenResponse?> RefreshTokensAsync(string refreshToken, string? ipAddress = null)
+    {
+        // Validate the refresh token
+        var existingToken = await ValidateRefreshTokenAsync(refreshToken);
+        
+        if (existingToken == null)
+            return null;
+
+        // Update the last used timestamp
+        existingToken.LastUsedAt = DateTime.UtcNow;
+
+        // Mark the old token as replaced (token rotation)
+        existingToken.IsReplaced = true;
+
+        // Create new refresh token (rotation)
+        var newRefreshToken = await CreateRefreshTokenAsync(
+            existingToken.UserId, 
+            ipAddress);
+
+        // Generate new access token
+        var user = existingToken.User;
+        var accessToken = _jwtService.GenerateToken(user);
+        var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
+            _jwtService.GetAccessTokenExpirationMinutes());
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Rotated refresh token for user {UserId}. Old: {OldTokenId}, New: {NewTokenId}",
+            user.Id, existingToken.Id, newRefreshToken.Id);
+
+        return new TokenResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = newRefreshToken.Token,
+            AccessTokenExpiry = accessTokenExpiry,
+            RefreshTokenExpiry = newRefreshToken.ExpiresAt
+        };
+    }
+
+    public async Task<bool> RevokeTokenAsync(
+        string token, 
+        string? reason = null, 
+        string? ipAddress = null)
+    {
+        var refreshToken = await _context.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.Token == token);
+
+        if (refreshToken == null)
+            return false;
+
+        if (refreshToken.IsRevoked)
+            return true; // Already revoked
+
+        refreshToken.IsRevoked = true;
+        refreshToken.RevocationReason = reason;
+        refreshToken.LastUsedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Revoked refresh token {TokenId} for user {UserId}. Reason: {Reason}",
+            refreshToken.Id, refreshToken.UserId, reason ?? "Not specified");
+
+        return true;
+    }
+
+    public async Task<bool> RevokeAllUserTokensAsync(Guid userId, string? reason = null)
+    {
+        var activeTokens = await _context.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .ToListAsync();
+
+        foreach (var token in activeTokens)
+        {
+            token.IsRevoked = true;
+            token.RevocationReason = reason ?? "All tokens revoked";
+            token.LastUsedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        _logger.LogWarning(
+            "Revoked {Count} active refresh tokens for user {UserId}. Reason: {Reason}",
+            activeTokens.Count, userId, reason ?? "Not specified");
+
+        return true;
+    }
+
+    public async Task<int> CleanupExpiredTokensAsync()
+    {
+        var cutoffDate = DateTime.UtcNow.AddDays(-1); // Keep recently expired for audit
+        
+        var tokensToDelete = await _context.RefreshTokens
+            .Where(rt => rt.IsRevoked && rt.CreatedAt < cutoffDate)
+            .ToListAsync();
+
+        // Also delete very old expired tokens (never used)
+        tokensToDelete.AddRange(
+            await _context.RefreshTokens
+                .Where(rt => rt.IsExpired && rt.CreatedAt < DateTime.UtcNow.AddDays(-30))
+                .ToListAsync()
+        );
+
+        _context.RefreshTokens.RemoveRange(tokensToDelete);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Cleaned up {Count} old refresh tokens", tokensToDelete.Count);
+        
+        return tokensToDelete.Count;
+    }
+
+    public async Task<IEnumerable<RefreshToken>> GetUserRefreshTokensAsync(Guid userId)
+    {
+        return await _context.RefreshTokens
+            .Where(rt => rt.UserId == userId)
+            .OrderByDescending(rt => rt.CreatedAt)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// Ensures user doesn't have too many active tokens (security measure)
+    /// </summary>
+    private async Task EnforceMaxTokensLimitAsync(Guid userId)
+    {
+        var activeTokens = await _context.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .OrderByDescending(rt => rt.CreatedAt)
+            .ToListAsync();
+
+        if (activeTokens.Count >= _settings.MaxActiveTokensPerUser)
+        {
+            // Revoke oldest tokens that exceed the limit
+            var tokensToRevoke = activeTokens
+                .Skip(_settings.MaxActiveTokensPerUser - 1)
+                .ToList();
+
+            foreach (var token in tokensToRevoke)
+            {
+                token.IsRevoked = true;
+                token.RevocationReason = "Exceeded maximum active tokens limit";
+                _logger.LogInformation(
+                    "Auto-revoked old refresh token {TokenId} for user {UserId} due to max tokens limit",
+                    token.Id, userId);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Settings class for refresh token configuration
+/// </summary>
+public class RefreshTokenSettings
+{
+    public int ExpiresInDays { get; set; } = 7;
+    public int MaxActiveTokensPerUser { get; set; } = 5;
+}
