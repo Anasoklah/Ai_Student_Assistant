@@ -4,7 +4,7 @@ namespace SyrianStudyBot.Domain.Entities;
 
 public class RefreshToken
 {
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
     
     public string Token { get; set; } = string.Empty;
     

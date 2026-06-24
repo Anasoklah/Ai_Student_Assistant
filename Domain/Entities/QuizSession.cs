@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SyrianStudyBot.Domain.Enums;
 
 namespace SyrianStudyBot.Domain;
 
@@ -8,8 +9,8 @@ public class QuizSession
     public Guid UserId { get; set; }
     public ApplicationUser User { get; set; } = null!;
 
-    public string? Subject { get; set; }
-    public string? GradeLevel { get; set; }
+    public Subject? Subject { get; set; }
+    public GradeLevel? GradeLevel { get; set; }
     public int TotalQuestions { get; set; }
 
     public JsonDocument Questions { get; set; } = null!;  // Generated questions

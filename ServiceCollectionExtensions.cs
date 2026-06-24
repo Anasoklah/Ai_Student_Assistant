@@ -1,9 +1,13 @@
 using System.Text;
+using Authentication.interfaces;
+using Authentication.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using SyrianStudyBot.Data.BackgroundJobs;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.interfaces;
+using SyrianStudyBot.interfaces.Auth;
 using SyrianStudyBot.Services;
 
 namespace SyrianStudyBot;
@@ -18,6 +22,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
+        services.AddScoped<IAuthenticationService, AuthenticationService>();
+        services.AddScoped<IJwtService, JwtService>();
+        services.AddScoped<IEmailService, EmailService>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddHttpContextAccessor();
+        services.AddHostedService<TokenCleanupService>();
         return services;
     }
 
@@ -35,6 +45,12 @@ public static class ServiceCollectionExtensions
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
 
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+            options.AddPolicy("StudentOnly", policy => policy.RequireRole("Student", "Admin"));
+        });
+
         return services;
     }
 
@@ -48,7 +64,8 @@ public static class ServiceCollectionExtensions
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(configuration["Jwt:Secret"]!)),
+                    Encoding.UTF8.GetBytes(configuration["Jwt:Secret"]
+                        ?? throw new InvalidOperationException("Jwt:Secret is not configured."))),
                 ValidateIssuer = true,
                 ValidIssuer = configuration["Jwt:Issuer"],
                 ValidateAudience = true,

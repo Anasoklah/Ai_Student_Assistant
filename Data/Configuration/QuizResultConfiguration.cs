@@ -13,7 +13,9 @@ public class QuizResultConfiguration : IEntityTypeConfiguration<QuizResult>
         builder.HasIndex(e => e.Subject);
         builder.HasIndex(e => e.CompletedAt);
 
-        builder.Property(e => e.Subject).HasMaxLength(100);
+        builder.Property(e => e.Subject)
+            .HasConversion<string>()
+            .HasMaxLength(100);
 
         builder.HasOne(e => e.User)
             .WithMany(e => e.QuizResults)

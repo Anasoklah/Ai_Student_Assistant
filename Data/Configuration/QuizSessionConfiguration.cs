@@ -11,8 +11,12 @@ public class QuizSessionConfiguration : IEntityTypeConfiguration<QuizSession>
         builder.HasIndex(e => e.Subject);
         builder.HasIndex(e => e.IsCompleted);
 
-        builder.Property(e => e.Subject).HasMaxLength(100);
-        builder.Property(e => e.GradeLevel).HasMaxLength(50);
+        builder.Property(e => e.Subject)
+            .HasConversion<string>()
+            .HasMaxLength(100);
+        builder.Property(e => e.GradeLevel)
+            .HasConversion<string>()
+            .HasMaxLength(50);
 
         builder.HasOne(e => e.User)
             .WithMany(e => e.QuizSessions)

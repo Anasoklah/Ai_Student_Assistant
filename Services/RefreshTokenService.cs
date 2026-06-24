@@ -1,29 +1,33 @@
 // Services/RefreshTokenService.cs
 using System.Security.Cryptography;
 using Authentication.interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Dtos.auth.RefreshToken;
 using SyrianStudyBot.interfaces.Auth;
 
-
-namespace YourProject.Services;
+namespace SyrianStudyBot.Services;
 
 public class RefreshTokenService : IRefreshTokenService
 {
     private readonly AppDbContext _context;
     private readonly IJwtService _jwtService;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<RefreshTokenService> _logger;
     private readonly RefreshTokenSettings _settings;
 
     public RefreshTokenService(
         AppDbContext context,
         IJwtService jwtService,
+        UserManager<ApplicationUser> userManager,
         ILogger<RefreshTokenService> logger,
         IConfiguration configuration)
     {
         _context = context;
         _jwtService = jwtService;
+        _userManager = userManager;
         _logger = logger;
         
         _settings = new RefreshTokenSettings
@@ -80,7 +84,7 @@ public class RefreshTokenService : IRefreshTokenService
         }
 
         // Check if token is active
-        if (!refreshToken.IsActive)
+        if (!IsTokenActive(refreshToken))
         {
             _logger.LogWarning(
                 "Refresh token {TokenId} is not active. Revoked: {Revoked}, Replaced: {Replaced}, Expired: {Expired}",
@@ -95,6 +99,18 @@ public class RefreshTokenService : IRefreshTokenService
                 await RevokeAllUserTokensAsync(refreshToken.UserId, "Possible token reuse attack");
             }
             
+            return null;
+        }
+
+        if (!await _userManager.IsEmailConfirmedAsync(refreshToken.User))
+        {
+            _logger.LogWarning("Refresh token {TokenId} belongs to an unconfirmed user", refreshToken.Id);
+            return null;
+        }
+
+        if (await _userManager.IsLockedOutAsync(refreshToken.User))
+        {
+            _logger.LogWarning("Refresh token {TokenId} belongs to a locked-out user", refreshToken.Id);
             return null;
         }
 
@@ -171,7 +187,10 @@ public class RefreshTokenService : IRefreshTokenService
     public async Task<bool> RevokeAllUserTokensAsync(Guid userId, string? reason = null)
     {
         var activeTokens = await _context.RefreshTokens
-            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .Where(rt => rt.UserId == userId
+                && !rt.IsRevoked
+                && !rt.IsReplaced
+                && rt.ExpiresAt > DateTime.UtcNow)
             .ToListAsync();
 
         foreach (var token in activeTokens)
@@ -201,7 +220,7 @@ public class RefreshTokenService : IRefreshTokenService
         // Also delete very old expired tokens (never used)
         tokensToDelete.AddRange(
             await _context.RefreshTokens
-                .Where(rt => rt.IsExpired && rt.CreatedAt < DateTime.UtcNow.AddDays(-30))
+                .Where(rt => rt.ExpiresAt <= DateTime.UtcNow && rt.CreatedAt < DateTime.UtcNow.AddDays(-30))
                 .ToListAsync()
         );
 
@@ -227,7 +246,10 @@ public class RefreshTokenService : IRefreshTokenService
     private async Task EnforceMaxTokensLimitAsync(Guid userId)
     {
         var activeTokens = await _context.RefreshTokens
-            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .Where(rt => rt.UserId == userId
+                && !rt.IsRevoked
+                && !rt.IsReplaced
+                && rt.ExpiresAt > DateTime.UtcNow)
             .OrderByDescending(rt => rt.CreatedAt)
             .ToListAsync();
 
@@ -248,6 +270,9 @@ public class RefreshTokenService : IRefreshTokenService
             }
         }
     }
+
+    private static bool IsTokenActive(RefreshToken token) =>
+        !token.IsRevoked && !token.IsReplaced && token.ExpiresAt > DateTime.UtcNow;
 }
 
 /// <summary>

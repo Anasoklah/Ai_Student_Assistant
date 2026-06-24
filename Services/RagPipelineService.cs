@@ -1,4 +1,5 @@
 using SyrianStudyBot.Domain;
+using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Services;
@@ -12,7 +13,7 @@ public class RagPipelineService(
     // How many chunks to retrieve from the database per question
     private const int TopK = 5;
 
-    public async Task<string> QueryAsync(string question, string mode, string? subject, CancellationToken cancellationToken = default)
+    public async Task<string> QueryAsync(string question, ChatMode mode, Subject? subject, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("RAG query | mode={Mode} subject={Subject} question={Question}", mode, subject, question);
 
@@ -45,7 +46,7 @@ public class RagPipelineService(
 
     // Returns a different system prompt depending on what the student wants:
     // explain = clear explanation, summary = bullet points, quiz = MCQ questions
-    private static string BuildSystemPrompt(string mode, string context)
+    private static string BuildSystemPrompt(ChatMode mode, string context)
     {
         // IMPORTANT: always reply in the same language the student used.
         const string languageRule = """
@@ -63,7 +64,7 @@ public class RagPipelineService(
 
         return mode switch
         {
-            "summary" => $"""
+            ChatMode.Summary => $"""
                 You are a study assistant. Summarize the following content
                 clearly and concisely for a student preparing for an exam.
                 Use bullet points. Keep it structured and easy to review.
@@ -83,7 +84,7 @@ public class RagPipelineService(
                 {context}
                 """,
 
-            "quiz" => $"""
+            ChatMode.Quiz => $"""
                 You are a quiz generator. Based ONLY on the context below,
                 generate 5 multiple choice questions with 4 options each.
                 Mark the correct answer clearly.

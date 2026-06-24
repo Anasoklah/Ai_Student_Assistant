@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using SyrianStudyBot.Domain.Enums;
 
 namespace SyrianStudyBot.Domain.Entities;
 
@@ -12,8 +9,8 @@ public class ChatSession
     public ApplicationUser User { get; set; } = null!;
 
     public string? Title { get; set; }  // Auto-generated from first message
-    public string? Subject { get; set; }  // Filter subject for this session
-    public string Mode { get; set; } = "explain";  // explain, summary, quiz
+    public Subject? Subject { get; set; }
+    public ChatMode Mode { get; set; } = ChatMode.Explain;
 
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

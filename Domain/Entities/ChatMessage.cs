@@ -1,4 +1,4 @@
-using OpenAI.Chat;
+using SyrianStudyBot.Domain.Enums;
 
 namespace SyrianStudyBot.Domain.Entities;
 
