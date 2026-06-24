@@ -28,9 +28,12 @@ public class DocumentIngestionService(
         {
             Title = requestDto.Title,
             Subject = requestDto.Subject ,
+            GradeLevel = requestDto.GradeLevel,
             SourceName = requestDto.SourceName ,
             Edition = requestDto.Edition,
-            Language = requestDto.Language
+            Language = requestDto.Language,
+            DocumentType = requestDto.DocumentType,
+            IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
         };
 
 

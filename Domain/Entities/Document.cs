@@ -6,8 +6,8 @@ public class Document
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = string.Empty;
-    public string Subject { get; set; } = string.Empty;  // Keep as string for flexibility
-    public string? GradeLevel { get; set; }  // "Grade10", "Baccalaureate", etc.
+    public Subject Subject { get; set; }
+    public GradeLevel? GradeLevel { get; set; }
     public string SourceName { get; set; } = string.Empty;
     public string? Edition { get; set; }
     public string? Language { get; set; }

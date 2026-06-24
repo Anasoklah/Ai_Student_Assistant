@@ -18,8 +18,7 @@ public class RagController : ControllerBase
         if (request is null || string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("The question is required.");
 
-        var mode = string.IsNullOrWhiteSpace(request.Mode) ? "explain" : request.Mode;
-        var answer = await _ragPipeline.QueryAsync(request.Question, mode, request.Subject, cancellationToken);
+        var answer = await _ragPipeline.QueryAsync(request.Question, request.Mode, request.Subject, cancellationToken);
 
         return Ok(new RagQueryResponseDto { Answer = answer });
     }

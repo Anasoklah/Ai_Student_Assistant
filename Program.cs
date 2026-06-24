@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using SyrianStudyBot;
 using SyrianStudyBot.Data;
 using SyrianStudyBot.GlobalExceptionHanndler;
@@ -23,7 +24,11 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 #endregion
 
 // Controllers
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -44,7 +49,7 @@ builder.Services.AddJwtService(builder.Configuration);
 
 var app = builder.Build();
 
-
+await SeedIdentityRolesAsync(app.Services);
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
@@ -61,3 +66,15 @@ app.UseHttpsRedirection();
 app.MapControllers();
 
 app.Run();
+
+static async Task SeedIdentityRolesAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var roleManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole<Guid>>>();
+
+    foreach (var role in new[] { "Admin", "Student" })
+    {
+        if (!await roleManager.RoleExistsAsync(role))
+            await roleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole<Guid>(role));
+    }
+}

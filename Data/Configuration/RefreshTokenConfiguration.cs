@@ -12,9 +12,12 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
             
             builder.HasIndex(rt => rt.Token).IsUnique();
             builder.HasIndex(rt => rt.UserId);
+            builder.HasIndex(rt => new { rt.UserId, rt.ExpiresAt, rt.IsRevoked, rt.IsReplaced });
             
             builder.Property(rt => rt.Token).IsRequired().HasMaxLength(500);
             builder.Property(rt => rt.UserId).IsRequired();
+            builder.Property(rt => rt.CreatedByIp).HasMaxLength(100);
+            builder.Property(rt => rt.RevocationReason).HasMaxLength(500);
             
             // Relationship
             builder.HasOne(rt => rt.User)

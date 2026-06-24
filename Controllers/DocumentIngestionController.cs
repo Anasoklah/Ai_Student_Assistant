@@ -18,7 +18,7 @@ public class DocumentIngestionController : ControllerBase
         if (request is null)
             return BadRequest("Request body is required.");
 
-        if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Subject))
+        if (string.IsNullOrWhiteSpace(request.Title))
             return BadRequest("Title and Subject are required.");
 
         var document = await _ingestion.IngestAsync(request, cancellationToken);
@@ -28,9 +28,12 @@ public class DocumentIngestionController : ControllerBase
             Id = document.Id,
             Title = document.Title,
             Subject = document.Subject,
+            GradeLevel = document.GradeLevel,
             SourceName = document.SourceName,
             Edition = document.Edition,
             Language = document.Language,
+            DocumentType = document.DocumentType,
+            IsApproved = document.IsApproved,
             ChunkCount = document.Chunks.Count
         });
     }
