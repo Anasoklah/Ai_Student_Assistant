@@ -11,6 +11,7 @@ public class DocumentIngestionRequestDto
     public string? Edition { get; init; }
     public string? Language { get; init; }
     public DocumentType DocumentType { get; init; } = DocumentType.OfficialBook;
+    public Guid? UploadedByUserId { get; init; }
 
     public IReadOnlyList<ExtractedPageDto> Pages { get; init; } = [];
 }

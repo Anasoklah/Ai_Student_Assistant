@@ -36,6 +36,7 @@ builder.Services.AddSwaggerGen();
 
 // Services
 #region Services
+builder.Services.AddCommonServices();
 builder.Services.AddCoreServices();
 builder.Services.AddChatService();
 builder.Services.AddIdentityService();

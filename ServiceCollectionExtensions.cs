@@ -4,6 +4,8 @@ using Authentication.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using SyrianStudyBot.Common.Services;
+using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Data.BackgroundJobs;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.interfaces;
@@ -14,6 +16,16 @@ namespace SyrianStudyBot;
 
 public static class ServiceCollectionExtensions
 {
+    public static IServiceCollection AddCommonServices(this IServiceCollection services)
+    {
+        services.AddScoped<IPagingService, PagingService>();
+        services.AddScoped<IUserContextService, UserContextService>();
+        services.AddScoped<IUsageTrackingService, UsageTrackingService>();
+        services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
+        services.AddScoped<IDocumentRequestService, DocumentRequestService>();
+        return services;
+    }
+
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();

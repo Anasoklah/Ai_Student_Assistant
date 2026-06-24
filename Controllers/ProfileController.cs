@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using SyrianStudyBot.Common.Extensions;
+using SyrianStudyBot.Common.Mappers;
+using SyrianStudyBot.Common.Services;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Dtos;
@@ -10,25 +13,35 @@ namespace SyrianStudyBot.Controllers;
 [ApiController]
 [Route("api/profile")]
 [Authorize(Policy = "StudentOnly")]
-public class ProfileController(UserManager<ApplicationUser> userManager) : ControllerBase
+public class ProfileController(
+    UserManager<ApplicationUser> userManager,
+    IUsageTrackingService usageTrackingService) : ControllerBase
 {
     [HttpGet("me")]
     public async Task<IActionResult> GetMe()
     {
-        var user = await GetCurrentUserAsync();
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { message = "User not authenticated" });
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
         if (user is null)
             return Unauthorized(new { message = "User not authenticated" });
 
-        ResetUsageCountersIfNeeded(user);
+        usageTrackingService.ResetMessageCounterIfNeeded(user);
         await userManager.UpdateAsync(user);
 
-        return Ok(MapProfile(user));
+        return Ok(ProfileMappers.MapProfile(user));
     }
 
     [HttpPut("me")]
     public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequestDto request)
     {
-        var user = await GetCurrentUserAsync();
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { message = "User not authenticated" });
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
         if (user is null)
             return Unauthorized(new { message = "User not authenticated" });
 
@@ -42,61 +55,6 @@ public class ProfileController(UserManager<ApplicationUser> userManager) : Contr
             user.PreferredLanguage = request.PreferredLanguage.Trim();
 
         await userManager.UpdateAsync(user);
-        return Ok(MapProfile(user));
+        return Ok(ProfileMappers.MapProfile(user));
     }
-
-    private async Task<ApplicationUser?> GetCurrentUserAsync()
-    {
-        var userId = User.GetUserId();
-        return userId == Guid.Empty ? null : await userManager.FindByIdAsync(userId.ToString());
-    }
-
-    private static ProfileResponseDto MapProfile(ApplicationUser user) => new()
-    {
-        Id = user.Id,
-        Email = user.Email,
-        FullName = user.FullName,
-        PhoneNumber = user.PhoneNumber,
-        GradeLevel = user.GradeLevel,
-        PreferredLanguage = user.PreferredLanguage,
-        SubscriptionTier = user.SubscriptionTier,
-        SubscriptionExpiresAt = user.SubscriptionExpiresAt,
-        MessagesToday = user.MessagesToday,
-        DailyMessageLimit = GetDailyMessageLimit(user.SubscriptionTier),
-        UploadsThisMonth = user.UploadsThisMonth,
-        MonthlyUploadLimit = GetMonthlyUploadLimit(user.SubscriptionTier)
-    };
-
-    private static void ResetUsageCountersIfNeeded(ApplicationUser user)
-    {
-        var today = DateTime.UtcNow.Date;
-        if (user.LastMessageReset.Date < today)
-        {
-            user.MessagesToday = 0;
-            user.LastMessageReset = today;
-        }
-
-        var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-        if (user.LastUploadReset < currentMonth)
-        {
-            user.UploadsThisMonth = 0;
-            user.LastUploadReset = DateTime.UtcNow;
-        }
-    }
-
-    private static int GetDailyMessageLimit(SubscriptionTier tier) => tier switch
-    {
-        SubscriptionTier.Free => 10,
-        SubscriptionTier.Pro => 500,
-        SubscriptionTier.Ultra => 2000,
-        _ => 10
-    };
-
-    private static int GetMonthlyUploadLimit(SubscriptionTier tier) => tier switch
-    {
-        SubscriptionTier.Free => 0,
-        SubscriptionTier.Pro => 10,
-        SubscriptionTier.Ultra => 100,
-        _ => 0
-    };
 }
