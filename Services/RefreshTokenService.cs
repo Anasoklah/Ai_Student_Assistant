@@ -130,6 +130,7 @@ public class RefreshTokenService : IRefreshTokenService
 
         // Mark the old token as replaced (token rotation)
         existingToken.IsReplaced = true;
+        await _context.SaveChangesAsync();
 
         // Create new refresh token (rotation)
         var newRefreshToken = await CreateRefreshTokenAsync(
@@ -141,8 +142,6 @@ public class RefreshTokenService : IRefreshTokenService
         var accessToken = _jwtService.GenerateToken(user);
         var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
             _jwtService.GetAccessTokenExpirationMinutes());
-
-        await _context.SaveChangesAsync();
 
         _logger.LogInformation(
             "Rotated refresh token for user {UserId}. Old: {OldTokenId}, New: {NewTokenId}",

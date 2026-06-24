@@ -5,6 +5,7 @@ using Authentication.Dtos.Register;
 using SyrianStudyBot.Dtos.auth.RefreshToken;
 using SyrianStudyBot.Dtos.auth;
 using Authentication.interfaces;
+using SyrianStudyBot.Common.Extensions;
 
 namespace Authentication.Controllers;
 
@@ -98,9 +99,9 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] Dtos.ResetPassword.ChangePasswordDto request)
     {
-         Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value , out var userId);
+        var userId = User.GetUserId();
 
-        if (userId ==  Guid.Empty)
+        if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
         var result = await _authService.ChangePassword(userId, request.oldPassword, request.newPassword);

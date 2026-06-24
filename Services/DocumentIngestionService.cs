@@ -33,6 +33,7 @@ public class DocumentIngestionService(
             Edition = requestDto.Edition,
             Language = requestDto.Language,
             DocumentType = requestDto.DocumentType,
+            UploadedByUserId = requestDto.UploadedByUserId,
             IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
         };
 

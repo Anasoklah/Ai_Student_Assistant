@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
@@ -6,6 +7,7 @@ namespace SyrianStudyBot.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = "AdminOnly")]
 public class RagController : ControllerBase
 {
     private readonly IRagPipelineService _ragPipeline;
