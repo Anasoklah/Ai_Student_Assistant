@@ -4,7 +4,7 @@ services:
     container_name: syrianstudybot-db
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
-      POSTGRES_DB: studybot
+      POSTGRES_DB: studybot_phase3
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:

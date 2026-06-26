@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Authentication.interfaces;
 using Authentication.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -76,9 +77,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtService(this IServiceCollection services , IConfiguration configuration)
     {
         // ── JWT Authentication ──
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
             .AddJwtBearer(options =>
         {
+            options.IncludeErrorDetails = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
@@ -91,6 +98,28 @@ public static class ServiceCollectionExtensions
                 ValidAudience = configuration["Jwt:Audience"],
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
+            };
+            options.Events = new JwtBearerEvents
+            {
+                OnChallenge = async context =>
+                {
+                    if (context.Response.HasStarted)
+                        return;
+
+                    context.HandleResponse();
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    context.Response.ContentType = "application/json";
+
+                    var detail = context.ErrorDescription
+                        ?? context.AuthenticateFailure?.Message
+                        ?? "Authentication failed.";
+
+                    await context.Response.WriteAsync(JsonSerializer.Serialize(new
+                    {
+                        message = "Unauthorized",
+                        detail
+                    }));
+                }
             };
         });
 
