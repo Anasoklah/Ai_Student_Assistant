@@ -16,16 +16,24 @@ public class PdfTextExtractorService(
         Func<Task> beforeVisionExtraction,
         CancellationToken cancellationToken = default)
     {
-        
-            var pages = ExtractPagesWithPdfPig(pdfBytes);
-            var totleCharacters = pages.Sum(page => page.Text.Length);
-            if (!forceVision &&  totleCharacters >= 200)
-                return pages;
+        if (!forceVision)
+        {
+            try
+            {
+                var pages = ExtractPagesWithPdfPig(pdfBytes);
+                var totalCharacters = pages.Sum(page => page.Text.Length);
+                if (totalCharacters >= PdfTextFastPathMinCharacters)
+                    return pages;
 
-            logger.LogInformation(
-                "PdfPig got only {Chars} chars. PDF is likely image-based, switching to vision",
-                totleCharacters);
-        
+                logger.LogInformation(
+                    "PdfPig got only {Chars} chars. PDF is likely image-based, switching to vision",
+                    totalCharacters);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "PdfPig could not extract text, switching to vision extraction");
+            }
+        }
 
         await beforeVisionExtraction();
         return await pdfVisionExtractor.ExtractTextAsync(pdfBytes, cancellationToken);

@@ -1,28 +1,20 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using SyrianStudyBot.Common.Extensions;
-using SyrianStudyBot.Common.Mappers;
-using SyrianStudyBot.Common.Services;
+using SyrianStudyBot.Application.UseCases;
 using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Dtos;
-using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Controllers;
 
 [ApiController]
 [Route("api/documents")]
 public class DocumentIngestionController(
-    IDocumentIngestionService ingestion,
-    AppDbContext db,
+    IDocumentUseCase documentUseCase,
     UserManager<ApplicationUser> userManager,
-    IPagingService pagingService,
-    IUsageTrackingService usageTrackingService,
-    IDocumentIngestionValidator documentValidator,
-    IDocumentRequestService documentRequestService) : ControllerBase
+    IDocumentIngestionValidator documentValidator) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
@@ -32,10 +24,24 @@ public class DocumentIngestionController(
         if (validationError is not null)
             return BadRequest(new { message = validationError });
 
-        var adminRequest = documentRequestService.CreateAdminRequest(request);
-        var document = await ingestion.IngestAsync(adminRequest, cancellationToken);
+        var document = await documentUseCase.IngestDocumentAsync(request, cancellationToken);
+        return Ok(document);
+    }
 
-        return Ok(DocumentMappers.MapDocument(document));
+    [HttpPost("upload")]
+    [Authorize(Policy = "AdminOnly")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
+            return Ok(document);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("student-upload")]
@@ -54,37 +60,47 @@ public class DocumentIngestionController(
         if (user is null)
             return Unauthorized(new { message = "User not authenticated" });
 
-        usageTrackingService.ResetUploadCounterIfNeeded(user);
-        if (!SubscriptionRules.CanUpload(user.SubscriptionTier))
-            return Forbid();
+        try
+        {
+            var document = await documentUseCase.UploadStudentDocumentAsync(request, user, cancellationToken);
+            return Ok(document);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return MapStudentUploadError(ex);
+        }
+    }
 
-        var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
-        if (user.UploadsThisMonth >= monthlyLimit)
-            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Monthly upload limit reached" });
+    [HttpPost("student-upload/file")]
+    [Authorize(Policy = "StudentOnly")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadStudentDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { message = "User not authenticated" });
 
-        var studentRequest = documentRequestService.CreateStudentRequest(request, userId);
-        var document = await ingestion.IngestAsync(studentRequest, cancellationToken);
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+            return Unauthorized(new { message = "User not authenticated" });
 
-        user.UploadsThisMonth++;
-        await usageTrackingService.UpsertUploadUsageAsync(user.Id, cancellationToken);
-        await userManager.UpdateAsync(user);
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(DocumentMappers.MapDocument(document));
+        try
+        {
+            var document = await documentUseCase.UploadStudentDocumentFileAsync(request, user, cancellationToken);
+            return Ok(document);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return MapStudentUploadError(ex);
+        }
     }
 
     [HttpPost("{documentId:guid}/approval")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> SetApproval(Guid documentId, [FromQuery] bool approve, CancellationToken cancellationToken)
     {
-        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
-        if (document is null)
-            return NotFound(new { message = "Document not found" });
-
-        document.IsApproved = approve;
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(DocumentMappers.MapDocument(document));
+        var document = await documentUseCase.SetApprovalAsync(documentId, approve, cancellationToken);
+        return document is null ? NotFound(new { message = "Document not found" }) : Ok(document);
     }
 
     [HttpGet]
@@ -96,29 +112,8 @@ public class DocumentIngestionController(
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
-
-        var query = db.Documents.Where(d => d.IsApproved);
-        if (subject.HasValue)
-            query = query.Where(d => d.Subject == subject.Value);
-        if (gradeLevel.HasValue)
-            query = query.Where(d => d.GradeLevel == gradeLevel.Value);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(d => d.UploadedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(d => DocumentMappers.MapDocument(d))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<DocumentIngestionResultDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+        var response = await documentUseCase.GetApprovedDocumentsAsync(subject, gradeLevel, page, pageSize, cancellationToken);
+        return Ok(response);
     }
 
     [HttpGet("admin")]
@@ -129,26 +124,17 @@ public class DocumentIngestionController(
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
+        var response = await documentUseCase.GetDocumentsForAdminAsync(isApproved, page, pageSize, cancellationToken);
+        return Ok(response);
+    }
 
-        var query = db.Documents.AsQueryable();
-        if (isApproved.HasValue)
-            query = query.Where(d => d.IsApproved == isApproved.Value);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(d => d.UploadedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(d => DocumentMappers.MapDocument(d))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<DocumentIngestionResultDto>
+    private IActionResult MapStudentUploadError(InvalidOperationException exception)
+    {
+        return exception.Message switch
         {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+            "Upload forbidden" => Forbid(),
+            "Monthly upload limit reached" => StatusCode(StatusCodes.Status429TooManyRequests, new { message = exception.Message }),
+            _ => BadRequest(new { message = exception.Message })
+        };
     }
 }

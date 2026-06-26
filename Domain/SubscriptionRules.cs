@@ -4,6 +4,8 @@ namespace SyrianStudyBot.Domain;
 
 public static class SubscriptionRules
 {
+    private const long Megabyte = 1024 * 1024;
+
     public static int GetDailyMessageLimit(SubscriptionTier tier) => tier switch
     {
         SubscriptionTier.Free => 10,
@@ -21,4 +23,12 @@ public static class SubscriptionRules
     };
 
     public static bool CanUpload(SubscriptionTier tier) => GetMonthlyUploadLimit(tier) > 0;
+
+    public static long GetMaxUploadFileSizeBytes(SubscriptionTier tier) => tier switch
+    {
+        SubscriptionTier.Free => 0,
+        SubscriptionTier.Pro => 10 * Megabyte,
+        SubscriptionTier.Ultra => 50 * Megabyte,
+        _ => 0
+    };
 }

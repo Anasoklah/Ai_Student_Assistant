@@ -154,7 +154,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> LogoutFromAllDevices()
     {
-         Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value , out var userId);
+         var userId = User.GetUserId();
 
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
@@ -171,7 +171,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetSessions()
     {
-        Guid.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value , out var userId);
+       var userId = User.GetUserId();
 
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });

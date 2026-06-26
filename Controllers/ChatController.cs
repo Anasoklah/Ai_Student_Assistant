@@ -1,14 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using SyrianStudyBot.Application.UseCases;
+using SyrianStudyBot.Common.Extensions;
 using SyrianStudyBot.Common.Mappers;
-using SyrianStudyBot.Common.Services;
-using SyrianStudyBot.Domain;
-using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Dtos;
-using SyrianStudyBot.interfaces;
 
 namespace SyrianStudyBot.Controllers;
 
@@ -16,11 +11,7 @@ namespace SyrianStudyBot.Controllers;
 [Route("api/chat")]
 [Authorize(Policy = "StudentOnly")]
 public class ChatController(
-    AppDbContext db,
-    UserManager<ApplicationUser> userManager,
-    IRagPipelineService ragPipeline,
-    IPagingService pagingService,
-    IUsageTrackingService usageTrackingService) : ControllerBase
+    IChatUseCase chatUseCase) : ControllerBase
 {
     [HttpPost("sessions")]
     public async Task<IActionResult> CreateSession([FromBody] CreateChatSessionRequestDto request, CancellationToken cancellationToken)
@@ -29,18 +20,8 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        var session = new ChatSession
-        {
-            UserId = userId,
-            Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim(),
-            Subject = request.Subject,
-            Mode = request.Mode
-        };
-
-        db.ChatSessions.Add(session);
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(ChatMappers.MapSession(session));
+        var session = await chatUseCase.CreateSessionAsync(userId, request, cancellationToken);
+        return Ok(session);
     }
 
     [HttpGet("sessions")]
@@ -53,26 +34,8 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
-
-        var query = db.ChatSessions
-            .Where(s => s.UserId == userId)
-            .OrderByDescending(s => s.LastActiveAt);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(s => ChatMappers.MapSession(s))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<ChatSessionResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+        var sessions = await chatUseCase.GetSessionsAsync(userId, page, pageSize, cancellationToken);
+        return Ok(sessions);
     }
 
     [HttpGet("sessions/{sessionId:guid}/messages")]
@@ -86,31 +49,15 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        var ownsSession = await db.ChatSessions
-            .AnyAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
-        if (!ownsSession)
-            return NotFound(new { message = "Chat session not found" });
-
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
-
-        var query = db.ChatMessages
-            .Where(m => m.SessionId == sessionId)
-            .OrderBy(m => m.Timestamp);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(m => ChatMappers.MapMessage(m))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<ChatMessageResponseDto>
+        try
         {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+            var messages = await chatUseCase.GetMessagesAsync(userId, sessionId, page, pageSize, cancellationToken);
+            return Ok(messages);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Chat session not found" });
+        }
     }
 
     [HttpPost("sessions/{sessionId:guid}/ask")]
@@ -123,55 +70,22 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        var user = await userManager.FindByIdAsync(userId.ToString());
-        if (user is null)
-            return Unauthorized(new { message = "User not authenticated" });
-
-        usageTrackingService.ResetMessageCounterIfNeeded(user);
-        var dailyLimit = SubscriptionRules.GetDailyMessageLimit(user.SubscriptionTier);
-        if (user.MessagesToday >= dailyLimit)
-            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Daily message limit reached" });
-
-        var session = await db.ChatSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.IsActive, cancellationToken);
-        if (session is null)
+        try
+        {
+            var response = await chatUseCase.AskAsync(userId, sessionId, request, cancellationToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = ex.Message });
+        }
+        catch (KeyNotFoundException)
+        {
             return NotFound(new { message = "Chat session not found" });
-
-        var question = request.Question.Trim();
-        var userMessage = new ChatMessage
-        {
-            SessionId = session.Id,
-            Role = ChatMessageRole.User,
-            Content = question
-        };
-
-        db.ChatMessages.Add(userMessage);
-        await db.SaveChangesAsync(cancellationToken);
-
-        var answer = await ragPipeline.QueryAsync(question, session.Mode, session.Subject, cancellationToken);
-        var assistantMessage = new ChatMessage
-        {
-            SessionId = session.Id,
-            Role = ChatMessageRole.Assistant,
-            Content = answer
-        };
-
-        db.ChatMessages.Add(assistantMessage);
-
-        if (string.IsNullOrWhiteSpace(session.Title))
-            session.Title = question.Length <= 80 ? question : question[..80];
-
-        session.LastActiveAt = DateTime.UtcNow;
-        user.MessagesToday++;
-        await usageTrackingService.UpsertDailyUsageAsync(user.Id, cancellationToken);
-        await userManager.UpdateAsync(user);
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(new AskQuestionResponseDto
-        {
-            Answer = answer,
-            UserMessage = ChatMappers.MapMessage(userMessage),
-            AssistantMessage = ChatMappers.MapMessage(assistantMessage)
-        });
+        }
     }
 }

@@ -41,12 +41,10 @@ builder.Services.AddCoreServices();
 builder.Services.AddChatService();
 builder.Services.AddIdentityService();
 builder.Services.AddJwtService(builder.Configuration);
+builder.Services.AddSettingsServices(builder.Configuration);
 
 #endregion
 
-// Chat Provider is handled in AddChatService
-
-// Optional Telegram worker registration is available in AddTelegramServices().
 
 var app = builder.Build();
 

@@ -42,7 +42,7 @@ public class AuthenticationService(
                 Message = "Email not confirmed, Please Confirm your Email before Login"
             };
 
-        var token = _jwtService.GenerateToken(user);
+        var token = await _jwtService.GenerateToken(user);
         var refreshToken = await _refreshTokenService.CreateRefreshTokenAsync(user.Id, GetClientIpAddress());
 
         user.LastLoginAt = DateTime.UtcNow;
@@ -114,7 +114,7 @@ public class AuthenticationService(
             };
         }
 
-        var accessToken = _jwtService.GenerateToken(user);
+        var accessToken = await _jwtService.GenerateToken(user);
         var refreshToken = await _refreshTokenService.CreateRefreshTokenAsync(userId, GetClientIpAddress());
 
         return new AuthResponse
@@ -243,30 +243,29 @@ public class AuthenticationService(
 
     #region Refresh Token Methods
 
-    public async Task<AuthResponse> RefreshTokenAsync(RefreshRequestDto request)
+  public async Task<AuthResponse> RefreshTokenAsync(RefreshRequestDto request)
+{
+    if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        return new AuthResponse { isSuccess = false, Message = "Refresh token is required" };
+
+    var tokenResponse = await _refreshTokenService.RefreshTokensAsync(
+        request.RefreshToken, GetClientIpAddress());
+        
+    if (tokenResponse is null)
+        return new AuthResponse { isSuccess = false, Message = "Invalid refresh token" };
+
+    return new AuthResponse
     {
-        if (string.IsNullOrWhiteSpace(request.RefreshToken))
-            return new AuthResponse { isSuccess = false, Message = "Refresh token is required" };
-
-        var tokenResponse = await _refreshTokenService.RefreshTokensAsync(request.RefreshToken, GetClientIpAddress());
-        if (tokenResponse is null)
-            return new AuthResponse { isSuccess = false, Message = "Invalid refresh token" };
-
-        var validated = await _refreshTokenService.ValidateRefreshTokenAsync(tokenResponse.RefreshToken);
-        var user = validated?.User;
-
-        return new AuthResponse
-        {
-            isSuccess = true,
-            UserName = user?.FullName,
-            userId = user?.Id,
-            Email = user?.Email,
-            AccessToken = tokenResponse.AccessToken,
-            AccessTokenExpiry = tokenResponse.AccessTokenExpiry,
-            RefreshToken = tokenResponse.RefreshToken,
-            RefreshTokenExpiry = tokenResponse.RefreshTokenExpiry
-        };
-    }
+        isSuccess = true,
+        UserName = tokenResponse.UserName,
+        userId = tokenResponse.UserId,
+        Email = tokenResponse.Email,
+        AccessToken = tokenResponse.AccessToken,
+        AccessTokenExpiry = tokenResponse.AccessTokenExpiry,
+        RefreshToken = tokenResponse.RefreshToken,
+        RefreshTokenExpiry = tokenResponse.RefreshTokenExpiry
+    };
+}
 
     public async Task<bool> RevokeTokenAsync(RevokeTokenRequestDto request)
     {

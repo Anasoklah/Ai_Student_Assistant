@@ -4,6 +4,7 @@ using Authentication.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using SyrianStudyBot.Application.UseCases;
 using SyrianStudyBot.Common.Services;
 using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Data.BackgroundJobs;
@@ -23,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
         services.AddScoped<IDocumentRequestService, DocumentRequestService>();
+        services.AddScoped<IDocumentFileStorageService, DocumentFileStorageService>();
         return services;
     }
 
@@ -31,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
         services.AddSingleton<IPdfVisionExtractorService, PdfVisionExtractorService>();
         services.AddSingleton<IPdfTextExtractorService, PdfTextExtractorService>();
+        services.AddScoped<IDocumentFileExtractionService, DocumentFileExtractionService>();
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
@@ -38,6 +41,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IChatUseCase, ChatUseCase>();
+        services.AddScoped<IDocumentUseCase, DocumentUseCase>();
+        services.AddScoped<IProfileUseCase, ProfileUseCase>();
+        services.AddScoped<IPaymentUseCase, PaymentUseCase>();
+        services.AddScoped<IQuizUseCase, QuizUseCase>();
         services.AddHttpContextAccessor();
         services.AddHostedService<TokenCleanupService>();
         return services;
@@ -111,6 +119,13 @@ public static class ServiceCollectionExtensions
             };
         });
 
+        return services;
+    }
+
+    public static IServiceCollection AddSettingsServices(this IServiceCollection services , IConfiguration configuration)
+    {
+        services.Configure<EmailSettings>(configuration.GetSection("Email"));
+        services.Configure<DocumentUploadOptions>(configuration.GetSection("DocumentUploads"));
         return services;
     }
 
