@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
         services.AddScoped<IDocumentRequestService, DocumentRequestService>();
+        services.AddScoped<IDocumentFileStorageService, DocumentFileStorageService>();
         return services;
     }
 
@@ -32,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
         services.AddSingleton<IPdfVisionExtractorService, PdfVisionExtractorService>();
         services.AddSingleton<IPdfTextExtractorService, PdfTextExtractorService>();
+        services.AddScoped<IDocumentFileExtractionService, DocumentFileExtractionService>();
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
@@ -123,6 +125,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSettingsServices(this IServiceCollection services , IConfiguration configuration)
     {
         services.Configure<EmailSettings>(configuration.GetSection("Email"));
+        services.Configure<DocumentUploadOptions>(configuration.GetSection("DocumentUploads"));
         return services;
     }
 

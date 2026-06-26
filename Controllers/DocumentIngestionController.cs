@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Application.UseCases;
-using SyrianStudyBot.Common.Extensions;
 using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Enums;
@@ -29,6 +28,22 @@ public class DocumentIngestionController(
         return Ok(document);
     }
 
+    [HttpPost("upload")]
+    [Authorize(Policy = "AdminOnly")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
+            return Ok(document);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost("student-upload")]
     [Authorize(Policy = "StudentOnly")]
     public async Task<IActionResult> UploadStudentDocument([FromBody] DocumentIngestionRequestDto request, CancellationToken cancellationToken)
@@ -52,9 +67,31 @@ public class DocumentIngestionController(
         }
         catch (InvalidOperationException ex)
         {
-            return ex.Message == "Upload forbidden"
-                ? Forbid()
-                : StatusCode(StatusCodes.Status429TooManyRequests, new { message = ex.Message });
+            return MapStudentUploadError(ex);
+        }
+    }
+
+    [HttpPost("student-upload/file")]
+    [Authorize(Policy = "StudentOnly")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadStudentDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { message = "User not authenticated" });
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+            return Unauthorized(new { message = "User not authenticated" });
+
+        try
+        {
+            var document = await documentUseCase.UploadStudentDocumentFileAsync(request, user, cancellationToken);
+            return Ok(document);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return MapStudentUploadError(ex);
         }
     }
 
@@ -89,5 +126,15 @@ public class DocumentIngestionController(
     {
         var response = await documentUseCase.GetDocumentsForAdminAsync(isApproved, page, pageSize, cancellationToken);
         return Ok(response);
+    }
+
+    private IActionResult MapStudentUploadError(InvalidOperationException exception)
+    {
+        return exception.Message switch
+        {
+            "Upload forbidden" => Forbid(),
+            "Monthly upload limit reached" => StatusCode(StatusCodes.Status429TooManyRequests, new { message = exception.Message }),
+            _ => BadRequest(new { message = exception.Message })
+        };
     }
 }

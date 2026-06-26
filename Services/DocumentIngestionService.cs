@@ -34,6 +34,8 @@ public class DocumentIngestionService(
             Language = requestDto.Language,
             DocumentType = requestDto.DocumentType,
             UploadedByUserId = requestDto.UploadedByUserId,
+            FileSizeBytes = requestDto.FileSizeBytes,
+            FilePath = requestDto.FilePath,
             IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
         };
 
