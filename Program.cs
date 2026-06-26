@@ -41,6 +41,7 @@ builder.Services.AddCoreServices();
 builder.Services.AddChatService();
 builder.Services.AddIdentityService();
 builder.Services.AddJwtService(builder.Configuration);
+builder.Services.AddSettingsServices(builder.Configuration);
 
 #endregion
 

@@ -4,6 +4,7 @@ using Authentication.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using SyrianStudyBot.Application.UseCases;
 using SyrianStudyBot.Common.Services;
 using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Data.BackgroundJobs;
@@ -38,6 +39,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IChatUseCase, ChatUseCase>();
+        services.AddScoped<IDocumentUseCase, DocumentUseCase>();
+        services.AddScoped<IProfileUseCase, ProfileUseCase>();
+        services.AddScoped<IPaymentUseCase, PaymentUseCase>();
+        services.AddScoped<IQuizUseCase, QuizUseCase>();
         services.AddHttpContextAccessor();
         services.AddHostedService<TokenCleanupService>();
         return services;
@@ -111,6 +117,12 @@ public static class ServiceCollectionExtensions
             };
         });
 
+        return services;
+    }
+
+    public static IServiceCollection AddSettingsServices(this IServiceCollection services , IConfiguration configuration)
+    {
+        services.Configure<EmailSettings>(configuration.GetSection("Email"));
         return services;
     }
 

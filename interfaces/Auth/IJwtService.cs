@@ -5,6 +5,6 @@ namespace Authentication.interfaces;
 
 public interface IJwtService
 {
-    string GenerateToken(ApplicationUser user);
+    Task<string> GenerateToken(ApplicationUser user);
     int GetAccessTokenExpirationMinutes();
 }

@@ -1,4 +1,3 @@
-// Services/RefreshTokenService.cs
 using System.Security.Cryptography;
 using Authentication.interfaces;
 using Microsoft.AspNetCore.Identity;
@@ -139,7 +138,7 @@ public class RefreshTokenService : IRefreshTokenService
 
         // Generate new access token
         var user = existingToken.User;
-        var accessToken = _jwtService.GenerateToken(user);
+        var accessToken = await _jwtService.GenerateToken(user);
         var accessTokenExpiry = DateTime.UtcNow.AddMinutes(
             _jwtService.GetAccessTokenExpirationMinutes());
 
@@ -152,7 +151,10 @@ public class RefreshTokenService : IRefreshTokenService
             AccessToken = accessToken,
             RefreshToken = newRefreshToken.Token,
             AccessTokenExpiry = accessTokenExpiry,
-            RefreshTokenExpiry = newRefreshToken.ExpiresAt
+            RefreshTokenExpiry = newRefreshToken.ExpiresAt,
+            Email = user.Email,
+            UserId = user.Id,
+            UserName = user.FullName
         };
     }
 
@@ -208,29 +210,24 @@ public class RefreshTokenService : IRefreshTokenService
         return true;
     }
 
-    public async Task<int> CleanupExpiredTokensAsync()
+     public async Task<int> CleanupExpiredTokensAsync()
     {
-        var cutoffDate = DateTime.UtcNow.AddDays(-1); // Keep recently expired for audit
-        
-        var tokensToDelete = await _context.RefreshTokens
+        var cutoffDate = DateTime.UtcNow.AddDays(-1);
+        var oldExpiredCutoff = DateTime.UtcNow.AddDays(-30);
+
+        // Single atomic DELETE query — zero memory allocation
+        var revokedDeleted = await _context.RefreshTokens
             .Where(rt => rt.IsRevoked && rt.CreatedAt < cutoffDate)
-            .ToListAsync();
+            .ExecuteDeleteAsync();
 
-        // Also delete very old expired tokens (never used)
-        tokensToDelete.AddRange(
-            await _context.RefreshTokens
-                .Where(rt => rt.ExpiresAt <= DateTime.UtcNow && rt.CreatedAt < DateTime.UtcNow.AddDays(-30))
-                .ToListAsync()
-        );
+        var expiredDeleted = await _context.RefreshTokens
+            .Where(rt => rt.ExpiresAt <= DateTime.UtcNow && rt.CreatedAt < oldExpiredCutoff)
+            .ExecuteDeleteAsync();
 
-        _context.RefreshTokens.RemoveRange(tokensToDelete);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("Cleaned up {Count} old refresh tokens", tokensToDelete.Count);
-        
-        return tokensToDelete.Count;
+        var total = revokedDeleted + expiredDeleted;
+        _logger.LogInformation("Cleaned up {Count} old refresh tokens", total);
+        return total;
     }
-
     public async Task<IEnumerable<RefreshToken>> GetUserRefreshTokensAsync(Guid userId)
     {
         return await _context.RefreshTokens
@@ -242,33 +239,36 @@ public class RefreshTokenService : IRefreshTokenService
     /// <summary>
     /// Ensures user doesn't have too many active tokens (security measure)
     /// </summary>
-    private async Task EnforceMaxTokensLimitAsync(Guid userId)
-    {
-        var activeTokens = await _context.RefreshTokens
-            .Where(rt => rt.UserId == userId
-                && !rt.IsRevoked
-                && !rt.IsReplaced
-                && rt.ExpiresAt > DateTime.UtcNow)
-            .OrderByDescending(rt => rt.CreatedAt)
-            .ToListAsync();
+ private async Task EnforceMaxTokensLimitAsync(Guid userId)
+{
+    // Use ExecuteUpdate for atomic operation — no race condition
+    var activeCount = await _context.RefreshTokens
+        .CountAsync(rt => rt.UserId == userId
+            && !rt.IsRevoked
+            && !rt.IsReplaced
+            && rt.ExpiresAt > DateTime.UtcNow);
 
-        if (activeTokens.Count >= _settings.MaxActiveTokensPerUser)
-        {
-            // Revoke oldest tokens that exceed the limit
-            var tokensToRevoke = activeTokens
-                .Skip(_settings.MaxActiveTokensPerUser - 1)
-                .ToList();
+    if (activeCount < _settings.MaxActiveTokensPerUser)
+        return;
 
-            foreach (var token in tokensToRevoke)
-            {
-                token.IsRevoked = true;
-                token.RevocationReason = "Exceeded maximum active tokens limit";
-                _logger.LogInformation(
-                    "Auto-revoked old refresh token {TokenId} for user {UserId} due to max tokens limit",
-                    token.Id, userId);
-            }
-        }
-    }
+    // Get IDs of tokens to revoke (oldest first)
+    var tokenIdsToRevoke = await _context.RefreshTokens
+        .Where(rt => rt.UserId == userId
+            && !rt.IsRevoked
+            && !rt.IsReplaced
+            && rt.ExpiresAt > DateTime.UtcNow)
+        .OrderBy(rt => rt.CreatedAt)
+        .Take(activeCount - _settings.MaxActiveTokensPerUser + 1)
+        .Select(rt => rt.Id)
+        .ToListAsync();
+
+    // Atomic bulk update — no loading into memory
+    await _context.RefreshTokens
+        .Where(rt => tokenIdsToRevoke.Contains(rt.Id))
+        .ExecuteUpdateAsync(s => s
+            .SetProperty(rt => rt.IsRevoked, true)
+            .SetProperty(rt => rt.RevocationReason, "Exceeded maximum active tokens limit"));
+}
 
     private static bool IsTokenActive(RefreshToken token) =>
         !token.IsRevoked && !token.IsReplaced && token.ExpiresAt > DateTime.UtcNow;

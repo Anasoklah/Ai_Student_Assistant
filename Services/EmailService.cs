@@ -1,16 +1,21 @@
-using System;
-using System.Net;
-using System.Net.Mail;
 using Authentication.interfaces;
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
 
 namespace Authentication.Services;
 
-public class EmailService(IConfiguration configuration ,
-ILogger<EmailService> logger) : IEmailService
+public class EmailService: IEmailService
 {
-    private readonly IConfiguration _configuration = configuration;
-    private readonly ILogger<EmailService> _logger = logger;
+    private readonly ILogger<EmailService> _logger;
+    private readonly EmailSettings _settings ;
 
+     public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    {
+        _logger = logger;
+        _settings = configuration.GetSection("Email").Get<EmailSettings>()
+            ?? throw new InvalidOperationException("Email settings not configured");
+    }
     public async Task SendResetPasswordToken(string to, string callbackUrl)
     {
         var subject = "Reset Password";
@@ -36,38 +41,34 @@ ILogger<EmailService> logger) : IEmailService
         await SendEmailAsync(to, subject, body);
     }
 
-    private async Task SendEmailAsync(string to , string subject, string htmlBody)
+    private async Task SendEmailAsync(string to, string subject, string htmlBody)
     {
-         try
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromEmail));
+        message.To.Add(MailboxAddress.Parse(to));
+        message.Subject = subject;
+        message.Body = new BodyBuilder { HtmlBody = htmlBody }.ToMessageBody();
+
+        using var client = new SmtpClient(); // MailKit's SmtpClient
+        try
         {
-            var smtpHost = _configuration["Email:smtpHost"];
-            var smtpPort = int.Parse(_configuration["Email:smtpPort"]!);
-            var FromEmail = _configuration["Email:FromEmail"];
-            var FromName = _configuration["Email:FromName"];
-            var Password = _configuration["Email:Password"];
-
-            var client = new SmtpClient(smtpHost, smtpPort)
-            {
-                 EnableSsl = true,
-                  Credentials = new NetworkCredential(FromEmail , Password)
-            };
-
-            var message = new MailMessage
-            {
-                From = new MailAddress(FromEmail! , "Auth Test"),
-                 Subject = subject,
-                 Body = htmlBody,
-                 IsBodyHtml = true
-            };
-
-            message.To.Add(to);
-               await client.SendMailAsync(message);
+            await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(_settings.FromEmail, _settings.Password);
+            await client.SendAsync(message);
             _logger.LogInformation("Email sent to {Email}", to);
         }
-        catch(Exception ex)
+        finally
         {
-            _logger.LogError(ex, "Failed to send email to {Email}", to);
-            throw; // Let caller handle retry logic
+            await client.DisconnectAsync(true);
         }
     }
+}
+
+public class EmailSettings
+{
+    public string SmtpHost { get; set; } = default!;
+    public int SmtpPort { get; set; }
+    public string FromEmail { get; set; } = default!;
+    public string FromName { get; set; } = default!;
+    public string Password { get; set; } = default!;
 }

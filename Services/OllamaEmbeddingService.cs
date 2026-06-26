@@ -35,23 +35,32 @@ public class OllamaEmbeddingService : IEmbeddingService
         return response.Embeddings[0].ToArray();
     }
 
-    public async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(IEnumerable<string> texts, CancellationToken cancellationToken = default)
-    {
-        var inputList = texts.ToList();
-        _logger.LogDebug("Generating embeddings for {Count} texts", inputList.Count);
-
-        // Embed one chunk at a time — sending all chunks in one request exceeds
-        // the model's context window when the document is large
-        List<float[]> results = [];
-        for (int i = 0; i < inputList.Count; i++)
+        public async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(
+            IEnumerable<string> texts, CancellationToken cancellationToken = default)
         {
-            if (_logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug("Embedding chunk {Current}/{Total}", i + 1, inputList.Count);
-            var request = new EmbedRequest { Model = _model, Input = [inputList[i]] };
-            var response = await _client.EmbedAsync(request, cancellationToken);
-            results.Add(response.Embeddings[0].ToArray());
-        }
+            var inputList = texts.ToList();
+            const int batchSize = 10; // tune based on your hardware
+            const int maxConcurrency = 3; // don't overwhelm Ollama
 
-        return results;
-    }
+            var results = new float[inputList.Count][];
+            var semaphore = new SemaphoreSlim(maxConcurrency);
+
+            var tasks = inputList.Select(async (text, index) =>
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    var request = new EmbedRequest { Model = _model, Input = [text] };
+                    var response = await _client.EmbedAsync(request, cancellationToken);
+                    results[index] = response.Embeddings[0].ToArray();
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
+            return results;
+        }
 }

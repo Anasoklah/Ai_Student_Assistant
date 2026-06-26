@@ -1,11 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using SyrianStudyBot.Common.Extensions;
-using SyrianStudyBot.Common.Mappers;
-using SyrianStudyBot.Common.Services;
-using SyrianStudyBot.Domain;
+using SyrianStudyBot.Application.UseCases;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Dtos;
 
@@ -15,9 +10,7 @@ namespace SyrianStudyBot.Controllers;
 [Route("api/payments")]
 [Authorize(Policy = "StudentOnly")]
 public class PaymentsController(
-    AppDbContext db,
-    UserManager<ApplicationUser> userManager,
-    IPagingService pagingService) : ControllerBase
+    IPaymentUseCase paymentUseCase) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> CreatePayment([FromBody] CreatePaymentRequestDto request, CancellationToken cancellationToken)
@@ -32,20 +25,8 @@ public class PaymentsController(
         if (request.Amount <= 0)
             return BadRequest(new { message = "Amount must be greater than zero" });
 
-        var payment = new Payment
-        {
-            UserId = userId,
-            TargetTier = request.TargetTier,
-            Amount = request.Amount,
-            Currency = string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency.Trim().ToUpperInvariant(),
-            Method = PaymentMethod.ShamCash,
-            Status = PaymentStatus.Pending
-        };
-
-        db.Payments.Add(payment);
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(PaymentMappers.MapPayment(payment));
+        var payment = await paymentUseCase.CreatePaymentAsync(userId, request, cancellationToken);
+        return Ok(payment);
     }
 
     [HttpPost("{paymentId:guid}/proof")]
@@ -58,21 +39,15 @@ public class PaymentsController(
         if (string.IsNullOrWhiteSpace(request.ProviderTransactionId))
             return BadRequest(new { message = "Provider transaction id is required" });
 
-        var payment = await db.Payments
-            .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
-
-        if (payment is null)
-            return NotFound(new { message = "Payment not found" });
-
-        if (payment.Status is PaymentStatus.Completed or PaymentStatus.Refunded)
-            return Conflict(new { message = "Payment can no longer be changed" });
-
-        payment.ProviderTransactionId = request.ProviderTransactionId.Trim();
-        payment.ProviderResponse = request.ProviderResponse;
-        payment.Status = PaymentStatus.UnderReview;
-
-        await db.SaveChangesAsync(cancellationToken);
-        return Ok(PaymentMappers.MapPayment(payment));
+        try
+        {
+            var payment = await paymentUseCase.SubmitProofAsync(userId, paymentId, request, cancellationToken);
+            return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpGet("mine")]
@@ -85,26 +60,8 @@ public class PaymentsController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
-
-        var query = db.Payments
-            .Where(p => p.UserId == userId)
-            .OrderByDescending(p => p.CreatedAt);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(p => PaymentMappers.MapPayment(p))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<PaymentResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+        var response = await paymentUseCase.GetMyPaymentsAsync(userId, page, pageSize, cancellationToken);
+        return Ok(response);
     }
 
     [HttpGet("admin")]
@@ -115,61 +72,22 @@ public class PaymentsController(
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = pagingService.NormalizePaging(page, pageSize);
-
-        var query = db.Payments.AsQueryable();
-        if (status.HasValue)
-            query = query.Where(p => p.Status == status.Value);
-
-        query = query.OrderByDescending(p => p.CreatedAt);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(p => PaymentMappers.MapPayment(p))
-            .ToListAsync(cancellationToken);
-
-        return Ok(new PagedResponse<PaymentResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        });
+        var response = await paymentUseCase.GetPaymentsForAdminAsync(status, page, pageSize, cancellationToken);
+        return Ok(response);
     }
 
     [HttpPost("admin/{paymentId:guid}/review")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> ReviewPayment(Guid paymentId, [FromBody] ReviewPaymentRequestDto request, CancellationToken cancellationToken)
     {
-        var payment = await db.Payments
-            .Include(p => p.User)
-            .FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);
-
-        if (payment is null)
-            return NotFound(new { message = "Payment not found" });
-
-        if (payment.Status == PaymentStatus.Completed)
-            return Conflict(new { message = "Payment is already completed" });
-
-        payment.ProviderResponse = request.Note ?? payment.ProviderResponse;
-
-        if (!request.Approve)
+        try
         {
-            payment.Status = PaymentStatus.Failed;
-            await db.SaveChangesAsync(cancellationToken);
-            return Ok(PaymentMappers.MapPayment(payment));
+            var payment = await paymentUseCase.ReviewPaymentAsync(paymentId, request, cancellationToken);
+            return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
         }
-
-        payment.Status = PaymentStatus.Completed;
-        payment.CompletedAt = DateTime.UtcNow;
-
-        payment.User.SubscriptionTier = payment.TargetTier;
-        payment.User.SubscriptionExpiresAt = DateTime.UtcNow.AddDays(Math.Max(1, request.SubscriptionDays));
-        await userManager.UpdateAsync(payment.User);
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Ok(PaymentMappers.MapPayment(payment));
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 }

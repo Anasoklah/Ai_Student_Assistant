@@ -19,7 +19,7 @@ public class PdfTextExtractorService(
         
             var pages = ExtractPagesWithPdfPig(pdfBytes);
             var totleCharacters = pages.Sum(page => page.Text.Length);
-            if (!forceVision &&  totleCharacters >= 200)
+            if (!forceVision &&  totleCharacters >= PdfTextFastPathMinCharacters)
                 return pages;
 
             logger.LogInformation(

@@ -14,7 +14,7 @@ public class JwtService(IConfiguration configuration, UserManager<ApplicationUse
     private readonly IConfiguration _configuration = configuration;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
 
-    public string GenerateToken(ApplicationUser user)
+    public async Task<string> GenerateToken(ApplicationUser user)
     {
         var claims = new List<Claim>
         {
@@ -24,7 +24,7 @@ public class JwtService(IConfiguration configuration, UserManager<ApplicationUse
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var roles = _userManager.GetRolesAsync(user).GetAwaiter().GetResult();
+        var roles = await _userManager.GetRolesAsync(user);
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var secret = _configuration["Jwt:Secret"]
