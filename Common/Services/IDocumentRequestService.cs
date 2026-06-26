@@ -10,11 +10,9 @@ public interface IDocumentRequestService
     DocumentIngestionRequestDto CreateStudentRequest(DocumentIngestionRequestDto request, Guid userId);
     DocumentIngestionRequestDto CreateAdminFileRequest(
         DocumentFileUploadRequestDto request,
-        IReadOnlyList<ExtractedPageDto> pages,
-        StoredDocumentFile storedFile);
+        IReadOnlyList<ExtractedPageDto> pages);
     DocumentIngestionRequestDto CreateStudentFileRequest(
         DocumentFileUploadRequestDto request,
         Guid userId,
-        IReadOnlyList<ExtractedPageDto> pages,
-        StoredDocumentFile storedFile);
+        IReadOnlyList<ExtractedPageDto> pages);
 }

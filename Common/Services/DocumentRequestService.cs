@@ -44,8 +44,7 @@ public class DocumentRequestService : IDocumentRequestService
 
     public DocumentIngestionRequestDto CreateAdminFileRequest(
         DocumentFileUploadRequestDto request,
-        IReadOnlyList<ExtractedPageDto> pages,
-        StoredDocumentFile storedFile)
+        IReadOnlyList<ExtractedPageDto> pages)
     {
         return new DocumentIngestionRequestDto
         {
@@ -57,8 +56,8 @@ public class DocumentRequestService : IDocumentRequestService
             Language = request.Language,
             DocumentType = DocumentType.OfficialBook,
             UploadedByUserId = null,
-            FileSizeBytes = storedFile.FileSizeBytes,
-            FilePath = storedFile.FilePath,
+            FileSizeBytes = request.File.Length,
+            FilePath = null,
             Pages = pages
         };
     }
@@ -66,8 +65,7 @@ public class DocumentRequestService : IDocumentRequestService
     public DocumentIngestionRequestDto CreateStudentFileRequest(
         DocumentFileUploadRequestDto request,
         Guid userId,
-        IReadOnlyList<ExtractedPageDto> pages,
-        StoredDocumentFile storedFile)
+        IReadOnlyList<ExtractedPageDto> pages)
     {
         return new DocumentIngestionRequestDto
         {
@@ -79,8 +77,8 @@ public class DocumentRequestService : IDocumentRequestService
             Language = request.Language,
             DocumentType = DocumentType.StudentUpload,
             UploadedByUserId = userId,
-            FileSizeBytes = storedFile.FileSizeBytes,
-            FilePath = storedFile.FilePath,
+            FileSizeBytes = request.File.Length,
+            FilePath = null,
             Pages = pages
         };
     }

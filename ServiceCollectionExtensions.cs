@@ -24,7 +24,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
         services.AddScoped<IDocumentRequestService, DocumentRequestService>();
-        services.AddScoped<IDocumentFileStorageService, DocumentFileStorageService>();
         return services;
     }
 

@@ -32,7 +32,6 @@ public class DocumentUseCase : IDocumentUseCase
     private readonly IPagingService _pagingService;
     private readonly IDocumentIngestionValidator _documentValidator;
     private readonly IDocumentFileExtractionService _fileExtractionService;
-    private readonly IDocumentFileStorageService _fileStorageService;
     private readonly DocumentUploadOptions _uploadOptions;
 
     public DocumentUseCase(
@@ -43,7 +42,6 @@ public class DocumentUseCase : IDocumentUseCase
         IPagingService pagingService,
         IDocumentIngestionValidator documentValidator,
         IDocumentFileExtractionService fileExtractionService,
-        IDocumentFileStorageService fileStorageService,
         IOptions<DocumentUploadOptions> uploadOptions)
     {
         _db = db;
@@ -53,7 +51,6 @@ public class DocumentUseCase : IDocumentUseCase
         _pagingService = pagingService;
         _documentValidator = documentValidator;
         _fileExtractionService = fileExtractionService;
-        _fileStorageService = fileStorageService;
         _uploadOptions = uploadOptions.Value;
     }
 
@@ -70,22 +67,12 @@ public class DocumentUseCase : IDocumentUseCase
         if (validationError is not null)
             throw new InvalidOperationException(validationError);
 
-        StoredDocumentFile? storedFile = null;
-        try
-        {
-            storedFile = await _fileStorageService.SaveAsync(request.File, DocumentType.OfficialBook, userId: null, cancellationToken);
-            var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
-            var ingestionRequest = _documentRequestService.CreateAdminFileRequest(request, pages, storedFile);
-            ValidateReadablePages(ingestionRequest);
+        var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
+        var ingestionRequest = _documentRequestService.CreateAdminFileRequest(request, pages);
+        ValidateReadablePages(ingestionRequest);
 
-            var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
-            return DocumentMappers.MapDocument(document);
-        }
-        catch
-        {
-            _fileStorageService.DeleteIfExists(storedFile?.FilePath);
-            throw;
-        }
+        var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
+        return DocumentMappers.MapDocument(document);
     }
 
     public async Task<DocumentIngestionResultDto> UploadStudentDocumentAsync(DocumentIngestionRequestDto request, ApplicationUser user, CancellationToken cancellationToken = default)
@@ -123,29 +110,19 @@ public class DocumentUseCase : IDocumentUseCase
         if (validationError is not null)
             throw new InvalidOperationException(validationError);
 
-        StoredDocumentFile? storedFile = null;
-        try
-        {
-            storedFile = await _fileStorageService.SaveAsync(request.File, DocumentType.StudentUpload, user.Id, cancellationToken);
-            var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
-            var ingestionRequest = _documentRequestService.CreateStudentFileRequest(request, user.Id, pages, storedFile);
-            ValidateReadablePages(ingestionRequest);
+        var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
+        var ingestionRequest = _documentRequestService.CreateStudentFileRequest(request, user.Id, pages);
+        ValidateReadablePages(ingestionRequest);
 
-            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-            var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+        var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
 
-            user.UploadsThisMonth++;
-            await _usageTrackingService.UpsertUploadUsageAsync(user.Id, cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+        user.UploadsThisMonth++;
+        await _usageTrackingService.UpsertUploadUsageAsync(user.Id, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
-            return DocumentMappers.MapDocument(document);
-        }
-        catch
-        {
-            _fileStorageService.DeleteIfExists(storedFile?.FilePath);
-            throw;
-        }
+        return DocumentMappers.MapDocument(document);
     }
 
     public async Task<DocumentIngestionResultDto> SetApprovalAsync(Guid documentId, bool approve, CancellationToken cancellationToken = default)
