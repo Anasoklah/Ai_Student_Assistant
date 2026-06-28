@@ -5,6 +5,11 @@ using SyrianStudyBot;
 using SyrianStudyBot.Data;
 using SyrianStudyBot.GlobalExceptionHanndler;
 
+// Load .env file before builder creation so its values are picked up
+// by the environment-variables configuration source.
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+if (File.Exists(envPath))
+    DotNetEnv.Env.Load(envPath);
 
 var builder = WebApplication.CreateBuilder(args);
 
