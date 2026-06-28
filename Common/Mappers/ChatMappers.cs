@@ -11,7 +11,8 @@ public static class ChatMappers
         Id = session.Id,
         Title = session.Title,
         Subject = session.Subject,
-        Mode = session.Mode,
+        SectionFilter = session.SectionFilter,
+        ChapterFilter = session.ChapterFilter,
         IsActive = session.IsActive,
         CreatedAt = session.CreatedAt,
         LastActiveAt = session.LastActiveAt

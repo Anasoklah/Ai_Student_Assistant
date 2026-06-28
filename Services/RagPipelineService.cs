@@ -13,7 +13,7 @@ public class RagPipelineService(
     // How many chunks to retrieve from the database per question
     private const int TopK = 5;
 
-    public async Task<string> QueryAsync(string question, ChatMode mode, Subject? subject, CancellationToken cancellationToken = default)
+    public async Task<string> QueryAsync(string question, ChatMode mode, Subject? subject, string? sectionFilter = null, string? chapterFilter = null, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("RAG query | mode={Mode} subject={Subject} question={Question}", mode, subject, question);
 
@@ -22,7 +22,7 @@ public class RagPipelineService(
         var questionVector = await embeddingService.GenerateEmbeddingAsync(question, cancellationToken);
 
         // Step 2: Find the top-K most relevant chunks in the database
-        var chunks = await vectorSearch.SearchAsync(questionVector, subject, TopK, cancellationToken);
+        var chunks = await vectorSearch.SearchAsync(questionVector, subject, TopK, sectionFilter, chapterFilter, cancellationToken);
 
         if (chunks.Count == 0)
         {
@@ -51,7 +51,7 @@ public class RagPipelineService(
         // IMPORTANT: always reply in the same language the student used.
         const string languageRule = """
             IMPORTANT: Always respond in the same language the student used in their question. If they wrote in Arabic, respond fully in Arabic. If they wrote in English, respond in English.
-            IMPORTANT: Never use LaTeX notation. Write equations in plain text only. For example write "F = m × a" not "\[ F = m \times a \]". Use × for multiplication, ÷ for division, ² for squared, ³ for cubed.
+            IMPORTANT: Always use LaTeX notation for math. Use $...$ for inline equations (e.g., $F = ma$) and $$...$$ for display equations (e.g., $$E = mc^2$$). Never use plain-text substitutes like × or ÷ for equations.
             """;
 
         const string sourceRule = """

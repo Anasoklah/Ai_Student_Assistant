@@ -8,13 +8,15 @@ public class ChatSession
     public Guid UserId { get; set; }
     public ApplicationUser User { get; set; } = null!;
 
-    public string? Title { get; set; }  // Auto-generated from first message
+    public string Title { get; set; }  = string.Empty;
     public Subject? Subject { get; set; }
-    public ChatMode Mode { get; set; } = ChatMode.Explain;
 
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastActiveAt { get; set; } = DateTime.UtcNow;
+
+    public string? ChapterFilter { get; set; }
+    public string? SectionFilter { get; set; }
 
     public List<ChatMessage> Messages { get; set; } = [];
 }

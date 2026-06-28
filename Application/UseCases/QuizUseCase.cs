@@ -35,7 +35,7 @@ public class QuizUseCase : IQuizUseCase
     {
         var totalQuestions = Math.Clamp(request.TotalQuestions, 1, 20);
         var prompt = $"Generate {totalQuestions} exam questions for {request.Subject}.";
-        var quizText = await _ragPipeline.QueryAsync(prompt, ChatMode.Quiz, request.Subject, cancellationToken);
+        var quizText = await _ragPipeline.QueryAsync(prompt, ChatMode.Quiz, request.Subject, request.ChapterFilter , request.SectionFilter, cancellationToken);
 
         var questions = JsonDocument.Parse(JsonSerializer.Serialize(new
         {

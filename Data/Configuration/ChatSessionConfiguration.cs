@@ -18,11 +18,7 @@ public class ChatSessionConfiguration : IEntityTypeConfiguration<ChatSession>
         builder.Property(e => e.Subject)
             .HasConversion<string>()
             .HasMaxLength(100);
-        builder.Property(e => e.Mode)
-            .HasConversion<string>()
-            .HasMaxLength(50)
-            .HasDefaultValue(ChatMode.Explain);
-
+       
         builder.HasMany(e => e.Messages)
             .WithOne(e => e.Session)
             .HasForeignKey(e => e.SessionId)

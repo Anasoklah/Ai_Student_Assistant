@@ -8,6 +8,10 @@ public class GenerateQuizRequestDto
     public Subject Subject { get; init; }
     public GradeLevel? GradeLevel { get; init; }
     public int TotalQuestions { get; init; } = 5;
+
+    public string? SectionFilter {get; init;} = null;
+    public string? ChapterFilter {get; init;} = null;
+
 }
 
 public class QuizSessionResponseDto

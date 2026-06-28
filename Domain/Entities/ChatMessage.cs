@@ -18,5 +18,7 @@ public class ChatMessage
     public int? PromptTokens { get; set; }
     public int? CompletionTokens { get; set; }
 
+    public ChatMode Mode { get; set; } = ChatMode.Explain;
+
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

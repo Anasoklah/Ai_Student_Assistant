@@ -10,6 +10,8 @@ using SyrianStudyBot.Dtos;
 namespace SyrianStudyBot.Controllers;
 
 [ApiController]
+[RequestFormLimits(MultipartBodyLengthLimit = 200L * 1024 * 1024)]
+[RequestSizeLimit(200L * 1024 * 1024)]
 [Route("api/documents")]
 public class DocumentIngestionController(
     IDocumentUseCase documentUseCase,

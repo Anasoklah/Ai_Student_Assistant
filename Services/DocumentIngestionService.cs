@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Pgvector;
 using SyrianStudyBot.Data;
 using SyrianStudyBot.Domain;
@@ -11,25 +12,19 @@ public class DocumentIngestionService(
     IEmbeddingService embeddingService,
     ILogger<DocumentIngestionService> logger) : IDocumentIngestionService
 {
-    // How many words per chunk — kept small to stay within Ollama's
-    // default 2048 token context window (150 words ≈ 200 tokens)
     private const int ChunkSize = 150;
-
-    // How many words overlap between consecutive chunks
-    // so context is not lost at chunk boundaries
     private const int ChunkOverlap = 20;
 
     public async Task<Document> IngestAsync(DocumentIngestionRequestDto requestDto, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Starting ingestion for document '{Title}' (subject: {Subject})", requestDto.Title, requestDto.Subject);
 
-        // step 1: Create Document without Chuncks 
         var document = new Document
         {
             Title = requestDto.Title,
-            Subject = requestDto.Subject ,
+            Subject = requestDto.Subject,
             GradeLevel = requestDto.GradeLevel,
-            SourceName = requestDto.SourceName ,
+            SourceName = requestDto.SourceName,
             Edition = requestDto.Edition,
             Language = requestDto.Language,
             DocumentType = requestDto.DocumentType,
@@ -39,43 +34,35 @@ public class DocumentIngestionService(
             IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
         };
 
+        // Step 2: Split pages into section-aware segments (each segment knows its chapter/section)
+        var segments = SplitIntoSegments(requestDto.Pages);
+        logger.LogInformation("Detected {Count} text segments across sections", segments.Count);
 
-        // Step 2: Split the raw text into overlapping chunks
-        var chunks = requestDto.Pages 
-        .SelectMany(page => SplitIntoChunks(page.Text)
-        .Select(chunk => new PageChunk (
-            page.PageNumber,
-            chunk.Text ,
-            chunk.StartWord,
-            chunk.EndWord
-            ))).ToList();
+        // Step 3: Chunk each segment individually (chunks never cross section boundaries)
+        var chunks = segments.SelectMany(SplitSegmentIntoChunks).ToList();
         logger.LogInformation("Split into {Count} chunks", chunks.Count);
 
-     
-        // step 3: take texts from each chunck to embed it 
-        var chunkTexts = chunks.Select(c => c.Text).ToList();
-
-        // Step 4: Embed all chunks in one batch call (much faster than one-by-one)
-        var embeddings = await embeddingService.GenerateEmbeddingsAsync(chunkTexts, cancellationToken);
+        // Step 4: Embed all chunks in one batch call
+        var embeddings = await embeddingService.GenerateEmbeddingsAsync(
+            chunks.Select(c => c.Text).ToList(), cancellationToken);
         logger.LogInformation("Generated {Count} embeddings", embeddings.Count);
-    
 
-        //step 5: add Chunks to Document 
+        // Step 5: Build DocumentChunk entities with full section metadata
         for (var i = 0; i < chunks.Count; i++)
         {
             document.Chunks.Add(new DocumentChunk
             {
                 ChunkIndex = i,
                 PageNumber = chunks[i].PageNumber,
+                ChapterTitle = chunks[i].ChapterTitle,
+                SectionTitle = chunks[i].SectionTitle,
                 StartWord = chunks[i].StartWord,
                 EndWord = chunks[i].EndWord,
                 Content = chunks[i].Text,
                 Embedding = new Vector(embeddings[i])
             });
-            
         }
 
-        // Step 6: Save the document and all its chunks to the database in one transaction
         db.Documents.Add(document);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -83,34 +70,128 @@ public class DocumentIngestionService(
         return document;
     }
 
-    // Splits text into overlapping windows of words.
-    // Example with ChunkSize=5 and ChunkOverlap=2:
-    //   words: [A B C D E F G H]
-    //   chunk1: [A B C D E]
-    //   chunk2: [D E F G H]  ← starts 3 words back (overlap of D,E)
-    private static List<(string Text, int StartWord, int EndWord)> SplitIntoChunks(string text)
-    {
-        // Split into individual words, removing empty entries
-        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    // ── Section detection ──────────────────────────────────────────────────────
 
-        var chunks = new List<(string Text, int StartWord, int EndWord)>();
-        int step = ChunkSize - ChunkOverlap; // how far we advance each time
+    private enum HeadingLevel { None, Chapter, Section }
+
+    // Detects Arabic (and Markdown-prefixed) headings.
+    // Vision extraction produces "# " / "## " prefixes; PdfPig extraction uses Arabic keyword patterns.
+    private static HeadingLevel DetectHeadingLevel(string line)
+    {
+        // Markdown headings produced by vision LLM
+        if (line.StartsWith("## ")) return HeadingLevel.Section;
+        if (line.StartsWith("# ") && !line.StartsWith("## ")) return HeadingLevel.Chapter;
+
+        // Arabic chapter markers (الفصل / الوحدة / الباب / المحور)
+        if (Regex.IsMatch(line, @"^(الفصل|الوحدة|الباب|المحور)\s"))
+            return HeadingLevel.Chapter;
+
+        // Arabic section/lesson markers (الدرس / درس)
+        if (Regex.IsMatch(line, @"^(الدرس|درس)\s"))
+            return HeadingLevel.Section;
+
+        return HeadingLevel.None;
+    }
+
+    private static string StripHeadingPrefix(string line)
+    {
+        if (line.StartsWith("## ")) return line[3..].Trim();
+        if (line.StartsWith("# "))  return line[2..].Trim();
+        return line.Trim();
+    }
+
+    // ── Segmentation ──────────────────────────────────────────────────────────
+
+    private record TextSegment(int PageNumber, string? ChapterTitle, string? SectionTitle, string Text);
+
+    private static List<TextSegment> SplitIntoSegments(IReadOnlyList<ExtractedPageDto> pages)
+    {
+        var segments = new List<TextSegment>();
+        string? currentChapter = null;
+        string? currentSection = null;
+        var currentLines = new List<string>();
+        int currentPageNumber = pages.Count > 0 ? pages[0].PageNumber : 1;
+
+        foreach (var page in pages)
+        {
+            // Split on newlines (preserved by the updated PdfPig extractor and by vision LLM output)
+            var lines = page.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                var level = DetectHeadingLevel(line);
+
+                if (level == HeadingLevel.Chapter)
+                {
+                    FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
+                    currentChapter = StripHeadingPrefix(line);
+                    currentSection = null;
+                }
+                else if (level == HeadingLevel.Section)
+                {
+                    FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
+                    currentSection = StripHeadingPrefix(line);
+                }
+                else
+                {
+                    currentLines.Add(line);
+                    currentPageNumber = page.PageNumber;
+                }
+            }
+        }
+
+        FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
+        return segments;
+    }
+
+    private static void FlushSegment(
+        List<TextSegment> segments,
+        List<string> lines,
+        int pageNumber,
+        string? chapter,
+        string? section)
+    {
+        if (lines.Count == 0) return;
+        var text = string.Join(" ", lines);
+        if (!string.IsNullOrWhiteSpace(text))
+            segments.Add(new TextSegment(pageNumber, chapter, section, text));
+        lines.Clear();
+    }
+
+    // ── Chunking ──────────────────────────────────────────────────────────────
+
+    private sealed record SegmentChunk(
+        int PageNumber,
+        string? ChapterTitle,
+        string? SectionTitle,
+        string Text,
+        int StartWord,
+        int EndWord);
+
+    private static List<SegmentChunk> SplitSegmentIntoChunks(TextSegment segment)
+    {
+        var words = segment.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var chunks = new List<SegmentChunk>();
+        int step = ChunkSize - ChunkOverlap;
         int start = 0;
 
         while (start < words.Length)
         {
             int end = Math.Min(start + ChunkSize, words.Length);
             string chunkText = string.Join(' ', words[start..end]);
-            chunks.Add((chunkText, start , end -1));
+            chunks.Add(new SegmentChunk(
+                segment.PageNumber,
+                segment.ChapterTitle,
+                segment.SectionTitle,
+                chunkText,
+                start,
+                end - 1));
             start += step;
         }
 
         return chunks;
     }
-
-    private sealed record PageChunk(
-    int PageNumber,
-    string Text,
-    int StartWord,
-    int EndWord);
 }

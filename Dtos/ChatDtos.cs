@@ -4,11 +4,11 @@ namespace SyrianStudyBot.Dtos;
 
 public class CreateChatSessionRequestDto
 {
-    public string? Title { get; init; }
-    public Subject? Subject { get; init; }
-    public ChatMode Mode { get; init; } = ChatMode.Explain;
+    public string Title { get; set; } = string.Empty;
+    public Subject? Subject { get; set; }
+    public string? ChapterFilter { get; set; }   // "الوحدة الأولى"
+    public string? SectionFilter { get; set; }   // "الأعداد الصحيحة"
 }
-
 public class ChatSessionResponseDto
 {
     public Guid Id { get; init; }
@@ -16,6 +16,9 @@ public class ChatSessionResponseDto
     public Subject? Subject { get; init; }
     public ChatMode Mode { get; init; }
     public bool IsActive { get; init; }
+
+    public string? SectionFilter { get; set; } = null;
+    public string? ChapterFilter { get; set; } = null;
     public DateTime CreatedAt { get; init; }
     public DateTime LastActiveAt { get; init; }
 }
@@ -32,6 +35,7 @@ public class ChatMessageResponseDto
 public class AskQuestionRequestDto
 {
     public string Question { get; init; } = string.Empty;
+    public ChatMode chatMode {get; init;} = ChatMode.Explain; 
 }
 
 public class AskQuestionResponseDto

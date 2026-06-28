@@ -47,7 +47,6 @@ public class ChatUseCase : IChatUseCase
             UserId = userId,
             Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim(),
             Subject = request.Subject,
-            Mode = request.Mode
         };
 
         _db.ChatSessions.Add(session);
@@ -135,7 +134,12 @@ public class ChatUseCase : IChatUseCase
         _db.ChatMessages.Add(userMessage);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var answer = await _ragPipeline.QueryAsync(question, session.Mode, session.Subject, cancellationToken);
+        var answer = await _ragPipeline.QueryAsync(
+            question,
+            request.chatMode,
+            session.Subject,
+            session.ChapterFilter,
+            session.SectionFilter, cancellationToken);
         var assistantMessage = new ChatMessage
         {
             SessionId = session.Id,

@@ -1,6 +1,7 @@
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
 
 namespace SyrianStudyBot.Services;
 
@@ -38,15 +39,38 @@ public class PdfTextExtractorService(
         await beforeVisionExtraction();
         return await pdfVisionExtractor.ExtractTextAsync(pdfBytes, cancellationToken);
     }
-private static List<ExtractedPageDto> ExtractPagesWithPdfPig(byte[] bytes)
-{
-    using var pdf = PdfDocument.Open(bytes);
 
-    return pdf.GetPages()
-        .Select(page => new ExtractedPageDto{
-            PageNumber = page.Number,
-            Text = string.Join(" ", page.GetWords().Select(word => word.Text))})
-        .Where(page => !string.IsNullOrWhiteSpace(page.Text))
-        .ToList();
-}
+    private static List<ExtractedPageDto> ExtractPagesWithPdfPig(byte[] bytes)
+    {
+        using var pdf = PdfDocument.Open(bytes);
+
+        return pdf.GetPages()
+            .Select(page => new ExtractedPageDto
+            {
+                PageNumber = page.Number,
+                Text = ReconstructPageLines(page)
+            })
+            .Where(page => !string.IsNullOrWhiteSpace(page.Text))
+            .ToList();
+    }
+
+    // Groups words into lines by Y-coordinate proximity, preserving newline boundaries
+    // so that section headings can be detected downstream.
+    private static string ReconstructPageLines(Page page)
+    {
+        const double lineGroupingTolerance = 4.0;
+
+        var words = page.GetWords()
+            .Where(w => !string.IsNullOrWhiteSpace(w.Text))
+            .ToList();
+
+        if (words.Count == 0) return string.Empty;
+
+        var lines = words
+            .GroupBy(w => Math.Round(w.BoundingBox.Bottom / lineGroupingTolerance))
+            .OrderByDescending(g => g.Key)   // PDF Y=0 is bottom; descending = top-first
+            .Select(g => string.Join(" ", g.OrderBy(w => w.BoundingBox.Left).Select(w => w.Text)));
+
+        return string.Join("\n", lines);
+    }
 }
