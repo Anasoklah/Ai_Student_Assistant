@@ -6,6 +6,8 @@
 # dotenv files
 .env
 
+AGENTS.md
+
 *.json
 # User-specific files
 *.rsuser
