@@ -5,6 +5,7 @@ using SyrianStudyBot.Common.Services;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
@@ -116,7 +117,7 @@ public class ChatUseCase : IChatUseCase
         _usageTrackingService.ResetMessageCounterIfNeeded(user);
         var dailyLimit = SubscriptionRules.GetDailyMessageLimit(user.SubscriptionTier);
         if (user.MessagesToday >= dailyLimit)
-            throw new InvalidOperationException("Daily message limit reached");
+            throw new RateLimitExceededException("Daily message limit reached");
 
         var session = await _db.ChatSessions
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.IsActive, cancellationToken);

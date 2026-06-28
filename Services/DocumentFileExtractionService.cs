@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
@@ -29,7 +30,7 @@ public class DocumentFileExtractionService(
         if (TextExtensions.Contains(extension))
             return await ExtractTextFileAsync(file, cancellationToken);
 
-        throw new InvalidOperationException("Only PDF and text files are supported.");
+        throw new BadRequestException("Only PDF and text files are supported.");
     }
 
     private async Task<IReadOnlyList<ExtractedPageDto>> ExtractPdfPagesAsync(
@@ -43,7 +44,7 @@ public class DocumentFileExtractionService(
         var bytes = memoryStream.ToArray();
 
         if (!LooksLikePdf(bytes))
-            throw new InvalidOperationException("The uploaded file is not a valid PDF.");
+            throw new BadRequestException("The uploaded file is not a valid PDF.");
 
         return await pdfTextExtractor.ExtractPagesAsync(
             bytes,

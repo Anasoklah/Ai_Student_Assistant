@@ -4,7 +4,10 @@ using Authentication.Dtos.Register;
 using Authentication.interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
+using SyrianStudyBot.Data;
 using SyrianStudyBot.Domain;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos.auth.RefreshToken;
 using SyrianStudyBot.interfaces.Auth;
 
@@ -16,13 +19,15 @@ public class AuthenticationService(
     IEmailService emailService,
     IRefreshTokenService refreshTokenService,
     IHttpContextAccessor httpContextAccessor,
-    IConfiguration configuration) : IAuthenticationService
+    IConfiguration configuration,
+    AppDbContext db) : IAuthenticationService
 {
     private readonly IConfiguration _configuration = configuration;
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IJwtService _jwtService = jwtService;
     private readonly IEmailService _emailService = emailService;
     private readonly IRefreshTokenService _refreshTokenService = refreshTokenService;
+    private readonly AppDbContext _db = db;
 
     private int AccessTokenExpirationMinutes => _jwtService.GetAccessTokenExpirationMinutes();
 
@@ -64,7 +69,7 @@ public class AuthenticationService(
     public async Task<string> RegisterAsync(RegisterRequest request)
     {
         var existing = await _userManager.FindByEmailAsync(request.Email);
-        if (existing is not null) throw new InvalidOperationException("user already exists");
+        if (existing is not null) throw new ConflictException("user already exists");
 
         var user = new ApplicationUser
         {
@@ -76,25 +81,24 @@ public class AuthenticationService(
             PreferredLanguage = "ar"
         };
 
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
-            throw new InvalidOperationException(string.Join(Environment.NewLine, result.Errors.Select(e => e.Description)));
+        {
+            await transaction.RollbackAsync();
+            throw new BadRequestException(string.Join(Environment.NewLine, result.Errors.Select(e => e.Description)));
+        }
 
         await _userManager.AddToRoleAsync(user, "Student");
 
-        try
-        {
-            var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await _userManager.GenerateEmailConfirmationTokenAsync(user)));
-            var verificationLink = $"{_configuration["AppUrl"]}/api/auth/verifyEmail?token={token}&userId={user.Id}";
-            await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
+        var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await _userManager.GenerateEmailConfirmationTokenAsync(user)));
+        var verificationLink = $"{_configuration["AppUrl"]}/api/auth/verifyEmail?token={token}&userId={user.Id}";
+        await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
 
-            return "Registration successful! We've sent a confirmation link to your email. Please check your inbox (and spam folder) to activate your account.";
-        }
-        catch (Exception ex)
-        {
-            await _userManager.DeleteAsync(user);
-            throw new Exception($"Failed to send verification email, please try again, {ex.Message}");
-        }
+        await transaction.CommitAsync();
+
+        return "Registration successful! We've sent a confirmation link to your email. Please check your inbox (and spam folder) to activate your account.";
     }
 
     public async Task<AuthResponse> VerifyEmail(Guid userId, string token)
@@ -148,29 +152,18 @@ public class AuthenticationService(
                 Message = "Email Already Confirmed, You Can Login"
             };
 
-        try
-        {
-            var token = WebEncoders.Base64UrlEncode(
-                Encoding.UTF8.GetBytes(
-                    await _userManager.GenerateEmailConfirmationTokenAsync(user)));
+        var token = WebEncoders.Base64UrlEncode(
+            Encoding.UTF8.GetBytes(
+                await _userManager.GenerateEmailConfirmationTokenAsync(user)));
 
-            var verificationLink = $"{_configuration["AppUrl"]}/api/auth/verifyEmail?token={token}&userId={user.Id}";
-            await _emailService.SendVerificationEmailAsync(user.Email!, verificationLink);
+        var verificationLink = $"{_configuration["AppUrl"]}/api/auth/verifyEmail?token={token}&userId={user.Id}";
+        await _emailService.SendVerificationEmailAsync(user.Email!, verificationLink);
 
-            return new AuthResponse
-            {
-                isSuccess = true,
-                Message = "Email Confirmation Resent Successfully, Please Check Your Email"
-            };
-        }
-        catch (Exception)
+        return new AuthResponse
         {
-            return new AuthResponse
-            {
-                isSuccess = false,
-                Message = "Failed to send verification email. Please try again later."
-            };
-        }
+            isSuccess = true,
+            Message = "Email Confirmation Resent Successfully, Please Check Your Email"
+        };
     }
 
     public async Task<AuthResponse> ForgetPassword(string email)
@@ -188,15 +181,8 @@ public class AuthenticationService(
 
         var resetLink = $"{_configuration["AppUrl"]}/api/auth/ResetPassword?token={token}&userId={user.Id}";
 
-        try
-        {
-            await _emailService.SendResetPasswordToken(user.Email!, resetLink);
-            return new AuthResponse { isSuccess = true, Message = "Please check your email" };
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Failed to send email, please try again, {ex.Message}");
-        }
+        await _emailService.SendResetPasswordToken(user.Email!, resetLink);
+        return new AuthResponse { isSuccess = true, Message = "Please check your email" };
     }
 
     public async Task<AuthResponse> ResetPassword(Guid userId, string newPassword, string token)
