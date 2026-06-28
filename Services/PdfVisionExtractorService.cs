@@ -2,6 +2,7 @@ using System.ClientModel;
 using System.Diagnostics;
 using OpenAI;
 using OpenAI.Chat;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
@@ -63,7 +64,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
 
             if (pageImages.Count == 0)
             {
-                throw new InvalidOperationException("Vision extraction could not render the PDF into images. Ensure pdftoppm/poppler-utils is installed.");
+                throw new BadRequestException("Vision extraction could not render the PDF into images. Ensure pdftoppm/poppler-utils is installed.");
             }
 
             if (pageImages.Count > MaxPages)
@@ -111,7 +112,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"pdftoppm failed with exit code {process.ExitCode}: {stderr}{stdout}");
+            throw new BadRequestException($"pdftoppm failed with exit code {process.ExitCode}: {stderr}{stdout}");
         }
 
         var dir = Path.GetDirectoryName(outputPrefix)!;
@@ -128,7 +129,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
     {
         if (_visionClient is null)
         {
-            throw new InvalidOperationException("Vision extraction is not configured. Set OpenRouter:ApiKey first.");
+            throw new BadRequestException("Vision extraction is not configured. Set OpenRouter:ApiKey first.");
         }
 
         try
@@ -157,7 +158,7 @@ public class PdfVisionExtractorService : IPdfVisionExtractorService
         }
         catch (ClientResultException ex)
         {
-            throw new InvalidOperationException($"OpenRouter vision request failed: {ex.Message}", ex);
+            throw new BadRequestException($"OpenRouter vision request failed: {ex.Message}", ex);
         }
     }
 }

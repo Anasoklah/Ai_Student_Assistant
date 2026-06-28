@@ -7,6 +7,7 @@ using SyrianStudyBot.Common.Validators;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
@@ -65,7 +66,7 @@ public class DocumentUseCase : IDocumentUseCase
     {
         var validationError = _documentValidator.ValidateFileUploadRequest(request, _uploadOptions.MaxAdminFileSizeBytes);
         if (validationError is not null)
-            throw new InvalidOperationException(validationError);
+            throw new BadRequestException(validationError);
 
         var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
         var ingestionRequest = _documentRequestService.CreateAdminFileRequest(request, pages);
@@ -79,13 +80,13 @@ public class DocumentUseCase : IDocumentUseCase
     {
         _usageTrackingService.ResetUploadCounterIfNeeded(user);
         if (!SubscriptionRules.CanUpload(user.SubscriptionTier))
-            throw new InvalidOperationException("Upload forbidden");
+            throw new ForbiddenException("Upload forbidden");
 
-        var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
-        if (user.UploadsThisMonth >= monthlyLimit)
-            throw new InvalidOperationException("Monthly upload limit reached");
+            var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
+            if (user.UploadsThisMonth >= monthlyLimit)
+                throw new RateLimitExceededException("Monthly upload limit reached");
 
-        var studentRequest = _documentRequestService.CreateStudentRequest(request, user.Id);
+            var studentRequest = _documentRequestService.CreateStudentRequest(request, user.Id);
         var document = await _ingestion.IngestAsync(studentRequest, cancellationToken);
 
         user.UploadsThisMonth++;
@@ -99,16 +100,16 @@ public class DocumentUseCase : IDocumentUseCase
     {
         _usageTrackingService.ResetUploadCounterIfNeeded(user);
         if (!SubscriptionRules.CanUpload(user.SubscriptionTier))
-            throw new InvalidOperationException("Upload forbidden");
+            throw new ForbiddenException("Upload forbidden");
 
-        var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
-        if (user.UploadsThisMonth >= monthlyLimit)
-            throw new InvalidOperationException("Monthly upload limit reached");
+            var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
+            if (user.UploadsThisMonth >= monthlyLimit)
+                throw new RateLimitExceededException("Monthly upload limit reached");
 
-        var fileSizeLimit = SubscriptionRules.GetMaxUploadFileSizeBytes(user.SubscriptionTier);
-        var validationError = _documentValidator.ValidateFileUploadRequest(request, fileSizeLimit);
-        if (validationError is not null)
-            throw new InvalidOperationException(validationError);
+            var fileSizeLimit = SubscriptionRules.GetMaxUploadFileSizeBytes(user.SubscriptionTier);
+            var validationError = _documentValidator.ValidateFileUploadRequest(request, fileSizeLimit);
+            if (validationError is not null)
+                throw new BadRequestException(validationError);
 
         var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
         var ingestionRequest = _documentRequestService.CreateStudentFileRequest(request, user.Id, pages);
@@ -192,6 +193,6 @@ public class DocumentUseCase : IDocumentUseCase
     {
         var validationError = _documentValidator.ValidateIngestionRequest(request);
         if (validationError is not null)
-            throw new InvalidOperationException(validationError);
+            throw new BadRequestException(validationError);
     }
 }

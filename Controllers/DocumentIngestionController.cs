@@ -35,15 +35,8 @@ public class DocumentIngestionController(
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadAdminDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
-            return Ok(document);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
+        return Ok(document);
     }
 
     [HttpPost("student-upload")]
@@ -62,15 +55,8 @@ public class DocumentIngestionController(
         if (user is null)
             return Unauthorized(new { message = "User not authenticated" });
 
-        try
-        {
-            var document = await documentUseCase.UploadStudentDocumentAsync(request, user, cancellationToken);
-            return Ok(document);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return MapStudentUploadError(ex);
-        }
+        var document = await documentUseCase.UploadStudentDocumentAsync(request, user, cancellationToken);
+        return Ok(document);
     }
 
     [HttpPost("student-upload/file")]
@@ -86,15 +72,8 @@ public class DocumentIngestionController(
         if (user is null)
             return Unauthorized(new { message = "User not authenticated" });
 
-        try
-        {
-            var document = await documentUseCase.UploadStudentDocumentFileAsync(request, user, cancellationToken);
-            return Ok(document);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return MapStudentUploadError(ex);
-        }
+        var document = await documentUseCase.UploadStudentDocumentFileAsync(request, user, cancellationToken);
+        return Ok(document);
     }
 
     [HttpPost("{documentId:guid}/approval")]
@@ -128,15 +107,5 @@ public class DocumentIngestionController(
     {
         var response = await documentUseCase.GetDocumentsForAdminAsync(isApproved, page, pageSize, cancellationToken);
         return Ok(response);
-    }
-
-    private IActionResult MapStudentUploadError(InvalidOperationException exception)
-    {
-        return exception.Message switch
-        {
-            "Upload forbidden" => Forbid(),
-            "Monthly upload limit reached" => StatusCode(StatusCodes.Status429TooManyRequests, new { message = exception.Message }),
-            _ => BadRequest(new { message = exception.Message })
-        };
     }
 }

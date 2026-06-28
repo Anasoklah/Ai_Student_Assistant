@@ -5,6 +5,7 @@ using SyrianStudyBot.Common.Services;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
+using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Dtos;
 using SyrianStudyBot.interfaces;
 
@@ -92,7 +93,7 @@ public class QuizUseCase : IQuizUseCase
     public async Task<QuizResultResponseDto?> SubmitQuizAsync(Guid userId, Guid quizSessionId, SubmitQuizRequestDto request, CancellationToken cancellationToken = default)
     {
         if (request.MaxScore <= 0 || request.Score < 0 || request.Score > request.MaxScore)
-            throw new InvalidOperationException("Invalid score");
+            throw new BadRequestException("Invalid score");
 
         var session = await _db.QuizSessions
             .Include(q => q.Result)
@@ -102,7 +103,7 @@ public class QuizUseCase : IQuizUseCase
             return null;
 
         if (session.IsCompleted)
-            throw new InvalidOperationException("Quiz is already completed");
+            throw new ConflictException("Quiz is already completed");
 
         session.Answers = JsonDocument.Parse(request.Answers.GetRawText());
         session.Score = request.Score;

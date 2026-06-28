@@ -49,15 +49,8 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        try
-        {
-            var messages = await chatUseCase.GetMessagesAsync(userId, sessionId, page, pageSize, cancellationToken);
-            return Ok(messages);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound(new { message = "Chat session not found" });
-        }
+        var messages = await chatUseCase.GetMessagesAsync(userId, sessionId, page, pageSize, cancellationToken);
+        return Ok(messages);
     }
 
     [HttpPost("sessions/{sessionId:guid}/ask")]
@@ -70,22 +63,7 @@ public class ChatController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        try
-        {
-            var response = await chatUseCase.AskAsync(userId, sessionId, request, cancellationToken);
-            return Ok(response);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return StatusCode(StatusCodes.Status429TooManyRequests, new { message = ex.Message });
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound(new { message = "Chat session not found" });
-        }
+        var response = await chatUseCase.AskAsync(userId, sessionId, request, cancellationToken);
+        return Ok(response);
     }
 }

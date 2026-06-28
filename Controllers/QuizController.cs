@@ -54,14 +54,7 @@ public class QuizController(
         if (userId == Guid.Empty)
             return Unauthorized(new { message = "User not authenticated" });
 
-        try
-        {
-            var result = await quizUseCase.SubmitQuizAsync(userId, quizSessionId, request, cancellationToken);
-            return result is null ? NotFound(new { message = "Quiz session not found" }) : Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await quizUseCase.SubmitQuizAsync(userId, quizSessionId, request, cancellationToken);
+        return result is null ? NotFound(new { message = "Quiz session not found" }) : Ok(result);
     }
 }

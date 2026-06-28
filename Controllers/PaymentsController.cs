@@ -39,15 +39,8 @@ public class PaymentsController(
         if (string.IsNullOrWhiteSpace(request.ProviderTransactionId))
             return BadRequest(new { message = "Provider transaction id is required" });
 
-        try
-        {
-            var payment = await paymentUseCase.SubmitProofAsync(userId, paymentId, request, cancellationToken);
-            return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        var payment = await paymentUseCase.SubmitProofAsync(userId, paymentId, request, cancellationToken);
+        return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
     }
 
     [HttpGet("mine")]
@@ -80,14 +73,7 @@ public class PaymentsController(
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> ReviewPayment(Guid paymentId, [FromBody] ReviewPaymentRequestDto request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var payment = await paymentUseCase.ReviewPaymentAsync(paymentId, request, cancellationToken);
-            return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        var payment = await paymentUseCase.ReviewPaymentAsync(paymentId, request, cancellationToken);
+        return payment is null ? NotFound(new { message = "Payment not found" }) : Ok(payment);
     }
 }
