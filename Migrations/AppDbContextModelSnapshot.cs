@@ -9,6 +9,8 @@ using Pgvector;
 
 #nullable disable
 
+using SyrianStudyBot.Infrastructure.Persistence;
+
 namespace SyrianStudyBot.Migrations
 {
     [DbContext(typeof(AppDbContext))]

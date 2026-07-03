@@ -8,7 +8,7 @@
 
 AGENTS.md
 
-*.json
+appsettings*.json
 # User-specific files
 *.rsuser
 *.suo
