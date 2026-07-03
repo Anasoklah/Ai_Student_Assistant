@@ -2,8 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
 using SyrianStudyBot;
-using SyrianStudyBot.Data;
-using SyrianStudyBot.GlobalExceptionHanndler;
+using SyrianStudyBot.Infrastructure.Persistence;
+using SyrianStudyBot.Infrastructure.ExceptionHandling;
 
 // Load .env file before builder creation so its values are picked up
 // by the environment-variables configuration source.

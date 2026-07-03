@@ -1,6 +1,6 @@
 using SyrianStudyBot.Domain.Enums;
 
-namespace SyrianStudyBot.Domain;
+namespace SyrianStudyBot.Domain.Entities;
 
 public class Payment
 {

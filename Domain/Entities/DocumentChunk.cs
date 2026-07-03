@@ -1,6 +1,6 @@
 using Pgvector;
 
-namespace SyrianStudyBot.Domain;
+namespace SyrianStudyBot.Domain.Entities;
 
 public class DocumentChunk
 {

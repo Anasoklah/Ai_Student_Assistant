@@ -1,18 +1,29 @@
 using System.Text;
 using System.Text.Json;
-using Authentication.interfaces;
-using Authentication.Services;
+using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.Auth.Services;
+using SyrianStudyBot.Features.Auth.Services.BackgroundJobs;
+using SyrianStudyBot.Features.Auth.Services.Options;
+using SyrianStudyBot.Infrastructure.Common;
+using SyrianStudyBot.Infrastructure.Documents;
+using SyrianStudyBot.Infrastructure.Documents.Validation;
+using SyrianStudyBot.Infrastructure.Identity;
+using SyrianStudyBot.Infrastructure.Ai.VectorSearch;
+using SyrianStudyBot.Infrastructure.Ai.Rag;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
-using SyrianStudyBot.Application.UseCases;
-using SyrianStudyBot.Common.Services;
-using SyrianStudyBot.Common.Validators;
-using SyrianStudyBot.Data.BackgroundJobs;
-using SyrianStudyBot.Domain;
-using SyrianStudyBot.interfaces;
-using SyrianStudyBot.interfaces.Auth;
-using SyrianStudyBot.Services;
+using SyrianStudyBot.Features.Auth.UseCases;
+using SyrianStudyBot.Features.Chat.UseCases;
+using SyrianStudyBot.Features.Documents.UseCases;
+using SyrianStudyBot.Features.Payments.UseCases;
+using SyrianStudyBot.Features.Profile.UseCases;
+using SyrianStudyBot.Features.Quiz.UseCases;
+using SyrianStudyBot.Infrastructure.Persistence;
+using SyrianStudyBot.Domain.Entities;
+using SyrianStudyBot.Infrastructure.Ai.Chat;
+using SyrianStudyBot.Infrastructure.Ai.Embeddings;
+using SyrianStudyBot.Infrastructure.Documents.Pdf;
 
 namespace SyrianStudyBot;
 
@@ -41,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IAuthUseCase, AuthUseCase>();
         services.AddScoped<IChatUseCase, ChatUseCase>();
         services.AddScoped<IDocumentUseCase, DocumentUseCase>();
         services.AddScoped<IProfileUseCase, ProfileUseCase>();
@@ -53,7 +65,6 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddIdentityService(this IServiceCollection services)
     {
-        // ── Identity ──
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
         {
             options.Password.RequireDigit = true;
@@ -74,9 +85,8 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddJwtService(this IServiceCollection services , IConfiguration configuration)
+    public static IServiceCollection AddJwtService(this IServiceCollection services, IConfiguration configuration)
     {
-        // ── JWT Authentication ──
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -150,7 +160,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddSettingsServices(this IServiceCollection services , IConfiguration configuration)
+    public static IServiceCollection AddSettingsServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<EmailSettings>(configuration.GetSection("Email"));
         services.Configure<DocumentUploadOptions>(configuration.GetSection("DocumentUploads"));

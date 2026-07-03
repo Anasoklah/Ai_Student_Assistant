@@ -1,7 +1,7 @@
 using System.Text.Json;
 using SyrianStudyBot.Domain.Enums;
 
-namespace SyrianStudyBot.Domain;
+namespace SyrianStudyBot.Domain.Entities;
 
 public class QuizSession
 {
