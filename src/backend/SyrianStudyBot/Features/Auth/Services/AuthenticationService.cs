@@ -69,8 +69,8 @@ public class AuthenticationService(
         {
             UserName = request.Email,
             Email = request.Email,
-            FullName = $"{request.firstName} {request.lastName}",
-            PhoneNumber = request.phoneNumber,
+            FullName = $"{request.FirstName} {request.LastName}",
+            PhoneNumber = request.PhoneNumber,
             EmailConfirmed = false,
             PreferredLanguage = "ar"
         };
