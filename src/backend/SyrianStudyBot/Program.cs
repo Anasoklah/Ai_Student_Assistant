@@ -74,6 +74,7 @@ builder.Services.AddChatService();
 builder.Services.AddIdentityService();
 builder.Services.AddJwtService(builder.Configuration);
 builder.Services.AddSettingsServices(builder.Configuration);
+builder.Services.AddAiExtractionClient(builder.Configuration);
 
 #endregion
 

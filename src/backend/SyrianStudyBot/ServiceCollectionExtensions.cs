@@ -167,4 +167,43 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddAiExtractionClient(this IServiceCollection services, IConfiguration configuration)
+    {
+        var aiServiceConfig = configuration.GetSection("AiService");
+        var baseUrl = aiServiceConfig["BaseUrl"] ?? "http://localhost:8000";
+        var pollingIntervalSeconds = int.Parse(aiServiceConfig["PollingIntervalSeconds"] ?? "5");
+        var timeoutMinutes = int.Parse(aiServiceConfig["TimeoutMinutes"] ?? "30");
+        var enabled = bool.Parse(aiServiceConfig["Enabled"] ?? "false");
+
+        // Register the HttpClient with Polly policies
+        services.AddHttpClient("AiExtractionClient", (sp, client) =>
+        {
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        })
+        .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)))
+        .AddTransientHttpErrorPolicy(policy => policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+
+        // Register the client wrapper
+        services.AddSingleton<IAiExtractionClient>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<AiExtractionClient>>();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            return new AiExtractionClient(
+                httpClientFactory.CreateClient("AiExtractionClient"),
+                logger,
+                TimeSpan.FromSeconds(pollingIntervalSeconds),
+                TimeSpan.FromMinutes(timeoutMinutes)
+            );
+        });
+
+        // Conditionally register the extraction service based on configuration
+        if (enabled)
+        {
+            services.AddSingleton<IPdfTextExtractorService, AiServiceExtractionService>();
+        }
+
+        return services;
+    }
+
 }

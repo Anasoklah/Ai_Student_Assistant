@@ -15,5 +15,58 @@ services:
       timeout: 5s
       retries: 5
 
+  ai-service:
+    build:
+      context: ./src/ai-service
+      dockerfile: Dockerfile
+    container_name: syrianstudybot-ai-service
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - PROVIDER_PRIORITY=${PROVIDER_PRIORITY:-gemini,groq,openrouter}
+      - PROVIDER_RETRY_COUNT=${PROVIDER_RETRY_COUNT:-1}
+      - MAX_UPLOAD_SIZE_BYTES=${MAX_UPLOAD_SIZE_BYTES:-52428800}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: SyrianStudyBot/Dockerfile
+    container_name: syrianstudybot-backend
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=studybot_phase3;Username=postgres;Password=${DB_PASSWORD:-dev_password}
+      - AiService__BaseUrl=http://ai-service:8000
+      - AiService__PollingIntervalSeconds=5
+      - AiService__TimeoutMinutes=30
+      - AiService__Enabled=${AI_SERVICE_ENABLED:-false}
+      - Jwt__Secret=${Jwt__Secret:-your-secret-key-at-least-32-characters}
+      - Jwt__Issuer=${Jwt__Issuer:-YourApp}
+      - Jwt__Audience=${Jwt__Audience:-YourAppUsers}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    networks:
+      - app-network
+
 volumes:
   pgdata:
+
+networks:
+  app-network:
+    driver: bridge
+
