@@ -1,13 +1,53 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-venv/
-.env
+```
+# Dependencies
+node_modules/
+packages/
 
-# .NET
+# Build outputs
 bin/
 obj/
-*.user
-*.lock.json
+out/
+dist/
+build/
+target/
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Compiled files
+*.dll
+*.exe
+*.pdb
+*.so
+*.dylib
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Coverage reports
+coverage/
+htmlcov/
+
+# Package manager caches
+.npm/
+.yarn/
+.pip/
+```
