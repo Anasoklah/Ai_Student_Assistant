@@ -1,68 +1,94 @@
 import os
-import requests # سنستخدمها لإرسال النتائج للـ .NET
+
 from services.pdf_slice_service import PdfSliceService
 from services.gemini_service import GeminiService
-from models.dto import PageExtractionPayload
+from services.openrouter_service import OpenRouterService
+from services.groq_service import GroqService
+from Jobs.JobStore import JobStore
+from models.dto import PageResult
+
 
 class ExtractionManager:
-    def __init__(self, pdf_service: PdfSliceService, gemini_service: GeminiService, logger, config):
+    """
+    Orchestrates PDF extraction with a multi-provider fallback strategy:
+    1. Render each page as an image
+    2. Try Gemini vision → 429 → OpenRouter → fails → Groq
+    """
+
+    def __init__(self, pdf_service: PdfSliceService, gemini_service: GeminiService,
+                 openrouter_service: OpenRouterService, groq_service: GroqService,
+                 job_store: JobStore, logger, config):
         self.pdf_service = pdf_service
         self.gemini_service = gemini_service
+        self.openrouter_service = openrouter_service
+        self.groq_service = groq_service
+        self.job_store = job_store
         self.logger = logger
-        self.config = config # سنحتاج عنوان سيرفر الـ .NET من هنا
+        self.config = config
 
-    def process_pdf_in_background(self, pdf_path: str, book_id: str):
-        """
-        طريقة المعالجة الخلفية: تقطع الملف وتدفع النتائج صفحة بصفحة دون حجز الـ HTTP connection
-        """
-        self.logger.info(f"Starting async background job for book_id: {book_id}, path: {pdf_path}")
-        
+    def _try_extract_image(self, page_number: int, image_bytes: bytes):
+        """Try image extraction: Gemini → OpenRouter → Groq."""
+        # 1. Try Gemini
         try:
-            for page_num, text in self.pdf_service.extract_pages(pdf_path):
-                self.logger.info(f"Processing page {page_num} for book {book_id} in background...")
-                
-                # استدعاء Gemini
-                gemini_res = self.gemini_service.extract_concepts_from_text(page_num, text)
-                
-                # بناء الـ Payload الموجه للـ .NET Backend
-                payload = PageExtractionPayload(
-                    book_id=book_id,
-                    page_number=page_num,
-                    success=gemini_res.success,
-                    concepts=gemini_res.concepts,
-                    error_message=gemini_res.error_message
-                )
-                
-                # إرسال النتيجة فوراً (Webhook approach)
-                self.notify_backend(payload)
+            result = self.gemini_service.extract_concepts_from_image(page_number, image_bytes)
+            if result.success and result.concepts:
+                return result
+        except Exception as e:
+            if "RESOURCE_EXHAUSTED" not in str(e):
+                self.logger.warning(f"Gemini failed on page {page_number}: {e}")
 
-            self.logger.info(f"Successfully completed background job for book_id: {book_id}")
+        # 2. Try OpenRouter
+        self.logger.info(f"Trying OpenRouter on page {page_number}...")
+        try:
+            result = self.openrouter_service.extract_concepts_from_image(page_number, image_bytes)
+            if result.success and result.concepts:
+                return result
+        except Exception as e:
+            self.logger.warning(f"OpenRouter failed on page {page_number}: {e}")
+
+        # 3. Try Groq
+        self.logger.info(f"Trying Groq on page {page_number}...")
+        return self.groq_service.extract_concepts_from_image(page_number, image_bytes)
+
+    def process_pdf_in_background(self, pdf_path: str, book_id: str, job_id: str):
+        """
+        Processes an already-sliced PDF (only contains the requested pages).
+        Renders each page as an image and sends it to the LLM for extraction.
+        """
+        self.logger.info(f"Starting background job {job_id} for book_id: {book_id}, path: {pdf_path}")
+
+        try:
+            for page_num, _ in self.pdf_service.extract_pages(pdf_path):
+                self.logger.info(f"Processing page {page_num} for book {book_id} (job {job_id})...")
+
+                # Render page as image and send to LLM
+                image_bytes = self.pdf_service.render_page_as_image(pdf_path, page_num)
+                if image_bytes:
+                    result = self._try_extract_image(page_num, image_bytes)
+                else:
+                    self.logger.error(f"Failed to render page {page_num} as image.")
+                    from models.dto import ExtractionResponse
+                    result = ExtractionResponse(success=False, page_number=page_num, concepts=[],
+                                                error_message="Failed to render page as image.")
+
+                self.job_store.add_page_result(
+                    job_id,
+                    PageResult(
+                        page_number=page_num,
+                        success=result.success,
+                        concepts=result.concepts,
+                        error_message=result.error_message,
+                    ),
+                )
+
+            self.job_store.mark_ready(job_id)
+            self.logger.info(f"Job {job_id} (book {book_id}) completed successfully.")
 
         except Exception as e:
-            self.logger.error(f"Fatal error in background job for book {book_id}: {str(e)}")
-            # هنا يمكن إعلام الـ .NET بفشل العملية بالكامل إذا لزم الأمر
-        
+            self.logger.error(f"Fatal error in job {job_id} for book {book_id}: {str(e)}")
+            self.job_store.mark_failed(job_id, str(e))
+
         finally:
-            # تنظيف الملف بعد انتهاء المهمة الخلفية تماماً
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
-                self.logger.info(f"Background worker cleaned up temp file: {pdf_path}")
-
-    def notify_backend(self, payload: PageExtractionPayload):
-        """
-        تقوم بعمل POST request إلى الـ .NET Backend لتسليم البيانات المستخرجة
-        """
-        # مسار الـ Endpoint في الـ .NET Web API
-        url = f"{self.config.NET_BACKEND_URL}/api/v1/webhook/concepts"
-        try:
-            self.logger.info(f"Pushing page {payload.page_number} results to .NET backend...")
-            # إرسال الـ JSON كـ Payload
-            response = requests.post(url, json=payload.model_dump(), timeout=30)
-            
-            if response.status_code == 200 or response.status_code == 204:
-                self.logger.info(f"Successfully delivered page {payload.page_number} to .NET.")
-            else:
-                self.logger.error(f".NET backend responded with status: {response.status_code} for page {payload.page_number}")
-        
-        except Exception as e:
-            self.logger.error(f"Failed to connect to .NET backend to deliver page {payload.page_number}. Error: {str(e)}")
+                self.logger.info(f"Cleaned up sliced temp file for job {job_id}: {pdf_path}")

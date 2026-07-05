@@ -1,50 +1,54 @@
 import logging
+import sys
 from fastapi import FastAPI
 from api.routes import router as extraction_router
-from Config import Config  # افترضنا وجود كائن الإعدادات هنا
+from Config import Config
 from services.pdf_slice_service import PdfSliceService
 from services.gemini_service import GeminiService
+from services.openrouter_service import OpenRouterService
+from services.groq_service import GroqService
+from Jobs.JobStore import JobStore
 from services.extraction_manager import ExtractionManager
 
-# 1. إعداد الـ Logger العام للنظام باللغة الإنجليزية
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler() # لطباعة السجلات مباشرة في الـ Terminal / Docker Console
-    ]
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("AIServiceApp")
 
-# 2. تحميل الإعدادات (تأكد من قراءة قيم الـ ENV بمشروعك)
 config = Config()
 
-# 3. بناء شجرة الاعتماديات (Composition Root) تماماً كخطوة Program.cs في .NET
+# Fail fast: without this key every extraction request would fail individually
+# and silently at request time. Better to refuse to start at all.
+if not config.GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY is not set. The service cannot start without it.")
+    sys.exit(1)
+
 logger.info("Initializing system services and dependencies...")
 pdf_service = PdfSliceService(logger)
 gemini_service = GeminiService(config, logger)
+openrouter_service = OpenRouterService(config, logger)
+groq_service = GroqService(config, logger)
+job_store = JobStore()
 
-# جعل الـ Manager متاحاً للـ Routes (تم استيراده هناك عبر دالة get_extraction_manager)
-extraction_manager = ExtractionManager(pdf_service, gemini_service, logger)
+extraction_manager = ExtractionManager(pdf_service, gemini_service, openrouter_service,
+                                       groq_service, job_store, logger, config)
 
-# 4. بناء تطبيق FastAPI وتضمين الـ Routers
 app = FastAPI(
     title="Syrian Study Assistant - AI Service",
-    description="Python API for PDF Chunking and Gemini Extraction",
-    version="1.0.0"
+    description="Python API for PDF Chunking and LLM Extraction with multi-provider fallback",
+    version="2.2.0",
 )
 
-# تسجيل الـ Routes
 app.include_router(extraction_router)
+
 
 @app.get("/health", tags=["Infrastructure"])
 async def health_check():
-    """
-    Health check endpoint for Docker/Kubernetes probes.
-    """
     return {"status": "Healthy", "service": "ai-service"}
 
-# لتشغيل السيرفر محلياً أثناء التطوير عند استدعاء الملف مباشرة
+
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting Uvicorn server on port 8000...")

@@ -1,6 +1,9 @@
+import os
 import shutil
 import tempfile
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, Depends, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from models.dto import JobStatusResponse
 from services.extraction_manager import ExtractionManager
 
@@ -49,3 +52,61 @@ async def extract_pdf_async(
     except Exception as e:
         manager.logger.error(f"Failed to queue background job for book {book_id}. Error: {str(e)}")
         raise HTTPException(status_code=500, detail="Could not initialize background processing pipeline.")
+
+
+@router.post("/slice-pdf")
+async def slice_pdf(
+    file: UploadFile = File(...),
+    page_start: int = Form(1, description="First page to include (1-indexed, inclusive)"),
+    page_end: Optional[int] = Form(None, description="Last page to include (1-indexed, inclusive). None = last page."),
+    manager: ExtractionManager = Depends(get_extraction_manager),
+):
+    """
+    Slices the uploaded PDF to the requested page range and returns the sliced PDF directly.
+    No text extraction or rendering is performed.
+    """
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDFs are allowed.")
+
+    uploaded_path = None
+    sliced_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            uploaded_path = tmp.name
+
+        pdf_total = manager.pdf_service.count_pages(uploaded_path)
+        start = max(1, page_start)
+        end = min(page_end or pdf_total, pdf_total)
+        if start > end:
+            raise HTTPException(status_code=400, detail=f"page_start ({start}) is greater than page_end ({end}).")
+
+        sliced_path = manager.pdf_service.slice_pdf(uploaded_path, start, end)
+        os.remove(uploaded_path)
+        uploaded_path = None
+
+        def cleanup():
+            if sliced_path and os.path.exists(sliced_path):
+                os.remove(sliced_path)
+
+        return FileResponse(
+            sliced_path,
+            media_type="application/pdf",
+            filename=f"sliced_{start}-{end}.pdf",
+            background=cleanup,
+        )
+
+    except HTTPException:
+        if uploaded_path and os.path.exists(uploaded_path):
+            os.remove(uploaded_path)
+        if sliced_path and os.path.exists(sliced_path):
+            os.remove(sliced_path)
+        raise
+    except Exception as e:
+        manager.logger.error(f"Failed to slice PDF. Error: {str(e)}")
+        if uploaded_path and os.path.exists(uploaded_path):
+            os.remove(uploaded_path)
+        if sliced_path and os.path.exists(sliced_path):
+            os.remove(sliced_path)
+        raise HTTPException(status_code=500, detail="Failed to slice PDF.")
