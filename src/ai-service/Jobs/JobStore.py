@@ -26,10 +26,8 @@ class JobStore:
         self._jobs: Dict[str, JobRecord] = {}
         self._lock = threading.Lock()
 
-    def create(self, job_id: str, book_id: str, pages_total: int = 0,
-               page_start: int = 1, page_end: Optional[int] = None) -> JobRecord:
-        record = JobRecord(job_id=job_id, book_id=book_id, pages_total=pages_total,
-                           page_start=page_start, page_end=page_end)
+    def create(self, job_id: str, book_id: str, pages_total: int = 0) -> JobRecord:
+        record = JobRecord(job_id=job_id, book_id=book_id, pages_total=pages_total)
         with self._lock:
             self._jobs[job_id] = record
         return record

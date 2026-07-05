@@ -27,6 +27,8 @@ class PageResult(BaseModel):
     success: bool
     concepts: List[ExtractedConcept] = Field(default_factory=list)
     error_message: Optional[str] = None
+    extraction_service: Optional[str] = None
+    text_quality_score: Optional[float] = None
 
 
 class JobRecord(BaseModel):
@@ -41,8 +43,6 @@ class JobRecord(BaseModel):
     status_message: str = "Processing started."
     pages_done: int = 0
     pages_total: int = 0
-    page_start: int = 1
-    page_end: Optional[int] = None
     pages: List[PageResult] = Field(default_factory=list)
 
 
@@ -54,8 +54,6 @@ class JobAcceptedResponse(BaseModel):
     book_id: str
     status: str = JobStatus.PROCESSING.value
     message: str = "PDF accepted. Processing started in the background."
-    page_start: int = 1
-    page_end: Optional[int] = None
 
 
 class JobStatusResponse(BaseModel):
@@ -66,8 +64,6 @@ class JobStatusResponse(BaseModel):
     message: str
     pages_done: int = 0
     pages_total: int = 0
-    page_start: int = 1
-    page_end: Optional[int] = None
 
 
 class JobResultResponse(BaseModel):

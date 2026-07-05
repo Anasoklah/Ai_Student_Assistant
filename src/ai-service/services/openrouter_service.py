@@ -27,16 +27,31 @@ class OpenRouterService:
             self.logger.warning("OpenRouter API key not set. Fallback will be unavailable.")
 
     def _extract_json(self, text: str) -> str:
-        """Try to extract JSON from text that may contain other content."""
+        """Extract JSON from text that may contain other content."""
         text = text.strip()
+        
+        # Try direct parse first
         if text.startswith("{"):
             return text
+        
+        # Try extracting from markdown code blocks
         match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            return match(0)
+        
+        # Try finding a JSON object anywhere in the text
+        # This is a simple heuristic: find the first { and last }
+        try:
+            start = text.index("{")
+            end = text.rindex("}") + 1
+            candidate = text[start:end]
+            # Validate it's actually JSON by attempting to parse
+            json.loads(candidate)
+            return candidate
+        except (ValueError, json.JSONDecodeError):
+            pass
+        
+        # If all else fails, return as-is and let parse error handle it
         return text
 
     def _fix_json_escapes(self, text: str) -> str:

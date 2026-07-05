@@ -2,7 +2,7 @@ class PromptBuilder:
     # Bump this whenever the instructions below change meaningfully. Thread it
     # through into ExtractionResponse / your DB row so you can always tell
     # which prompt version produced which stored concepts.
-    PROMPT_VERSION = "v3-2026-07"
+    PROMPT_VERSION = "v2-2026-07"
 
     @staticmethod
     def build_extraction_prompt(text: str) -> str:
@@ -37,25 +37,14 @@ class PromptBuilder:
            (e.g., "قانون نيوتن الثاني" not just "فيزياء"), avoiding single generic
            subject-level terms unless no more specific term exists in the text.
         7. Ensure the output strictly adheres to the requested JSON schema.
-
-        FORMATTING RULES (very important):
-        - TABLES: Convert any tabular data into valid HTML <table> elements with <thead>, <tbody>, <tr>, <th>, and <td> tags.
-          Example: <table><thead><tr><th>القوة</th><th>الوحدة</th></tr></thead><tbody><tr><td>الوزن</td><td>نيوتن</td></tr></tbody></table>
-        - EQUATIONS: Convert all mathematical equations, formulas, and expressions into LaTeX notation enclosed in $ $ for inline or $$ $$ for display.
-          Example: $F = m \\times a$ or $$E = mc^2$$
-        - Do NOT use plain text approximations for equations (e.g., write $\\frac{{a}}{{b}}$ not "a over b").
         """
 
     @staticmethod
     def build_image_extraction_prompt() -> str:
         return """
-        You are an expert educational content extractor specialized in the Syrian school curriculum.
-        You are given an IMAGE of a textbook page. Read the text directly from the image
-        (this may be Arabic text, handwritten, or printed) and extract educational concepts,
-        definitions, explanations, and important questions.
-
-        Use OCR-like reasoning to read every word, equation, and diagram label from the image.
-        Do NOT ignore any readable text in the image.
+        You are an expert educational content extractor for scanned textbook pages.
+        Analyze the provided page image and extract educational concepts, definitions,
+        explanations, and important questions in Modern Standard Arabic.
 
         Strict Instructions:
         1. Extract concepts ONLY from information explicitly visible in the image.

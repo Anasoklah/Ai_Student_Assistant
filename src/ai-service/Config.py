@@ -22,3 +22,10 @@ class Config:
         self.GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
         self.GROQ_MODEL = os.environ.get("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
         self.GROQ_TIMEOUT_SECONDS = int(os.environ.get("GROQ_TIMEOUT_SECONDS", "120"))
+
+        # Provider fallback tuning
+        self.PROVIDER_RETRY_COUNT = int(os.environ.get("PROVIDER_RETRY_COUNT", "1"))
+        self.PROVIDER_PRIORITY = os.environ.get(
+            "PROVIDER_PRIORITY",
+            "gemini,groq,openrouter",
+        ).split(",")

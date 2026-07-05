@@ -3,7 +3,6 @@ import uuid
 import tempfile
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends, BackgroundTasks, HTTPException
-from typing import Optional
 
 from models.dto import JobAcceptedResponse, JobStatusResponse, JobResultResponse, JobStatus
 from services.extraction_manager import ExtractionManager
@@ -21,25 +20,25 @@ async def extract_pdf_async(
     background_tasks: BackgroundTasks,
     book_id: str = Form(..., description="The unique ID of the book from .NET database"),
     file: UploadFile = File(...),
-    page_start: int = Form(1, description="First page to process (1-indexed, inclusive)"),
-    page_end: Optional[int] = Form(None, description="Last page to process (1-indexed, inclusive). None = last page."),
+    page_start: int = Form(1, ge=1, description="First page to process (1-indexed, inclusive)"),
+    page_end: int | None = Form(None, ge=1, description="Last page to process (1-indexed, inclusive)"),
     manager: ExtractionManager = Depends(get_extraction_manager),
 ):
     """
-    Accepts the PDF, slices it to the requested page range, creates a job record,
-    kicks off background processing on the sliced file, and returns a job_id immediately.
+    Accepts the PDF, creates a job record, kicks off background processing,
+    and returns a job_id immediately. .NET polls GET /jobs/{job_id} afterward
+    — this endpoint no longer notifies .NET of anything itself.
     """
     if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDFs are allowed.")
 
     job_id = str(uuid.uuid4())
-    uploaded_path = None
-    sliced_path = None
+    temp_file_path = None
+    sliced_file_path = None
 
     try:
-        manager.logger.info(f"Accepting extraction request for book_id: {book_id} (job {job_id}), pages {page_start}-{page_end}")
+        manager.logger.info(f"Accepting extraction request for book_id: {book_id} (job {job_id})")
 
-        # 1. Save uploaded file to temp
         max_size = manager.config.MAX_UPLOAD_SIZE_BYTES
         size = 0
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -50,48 +49,44 @@ async def extract_pdf_async(
                     os.remove(tmp.name)
                     raise HTTPException(status_code=413, detail="File exceeds maximum allowed size.")
                 tmp.write(chunk)
-            uploaded_path = tmp.name
+            temp_file_path = tmp.name
 
-        # 2. Validate page range against the original PDF
-        pdf_total = manager.pdf_service.count_pages(uploaded_path)
+        pdf_total = manager.pdf_service.count_pages(temp_file_path)
         start = max(1, page_start)
         end = min(page_end or pdf_total, pdf_total)
         if start > end:
             raise HTTPException(status_code=400, detail=f"page_start ({start}) is greater than page_end ({end}).")
+
         pages_total = end - start + 1
+        sliced_file_path = manager.pdf_service.slice_pdf(temp_file_path, start, end)
 
-        # 3. Slice the PDF to only the requested pages
-        sliced_path = manager.pdf_service.slice_pdf(uploaded_path, start, end)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+            temp_file_path = None
 
-        # 4. Delete the original uploaded file (no longer needed)
-        os.remove(uploaded_path)
-        uploaded_path = None
-
-        # 5. Create job and kick off background processing on the sliced file
-        manager.job_store.create(job_id=job_id, book_id=book_id, pages_total=pages_total,
-                                 page_start=start, page_end=end)
+        manager.job_store.create(job_id=job_id, book_id=book_id, pages_total=pages_total)
 
         background_tasks.add_task(
             manager.process_pdf_in_background,
-            pdf_path=sliced_path,
+            pdf_path=sliced_file_path,
             book_id=book_id,
             job_id=job_id,
         )
 
-        return JobAcceptedResponse(job_id=job_id, book_id=book_id, page_start=start, page_end=end)
+        return JobAcceptedResponse(job_id=job_id, book_id=book_id)
 
     except HTTPException:
-        if uploaded_path and os.path.exists(uploaded_path):
-            os.remove(uploaded_path)
-        if sliced_path and os.path.exists(sliced_path):
-            os.remove(sliced_path)
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        if sliced_file_path and os.path.exists(sliced_file_path):
+            os.remove(sliced_file_path)
         raise
     except Exception as e:
         manager.logger.error(f"Failed to queue job for book {book_id}. Error: {str(e)}")
-        if uploaded_path and os.path.exists(uploaded_path):
-            os.remove(uploaded_path)
-        if sliced_path and os.path.exists(sliced_path):
-            os.remove(sliced_path)
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        if sliced_file_path and os.path.exists(sliced_file_path):
+            os.remove(sliced_file_path)
         raise HTTPException(status_code=500, detail="Could not initialize background processing pipeline.")
 
 
@@ -109,8 +104,6 @@ async def get_job_status(job_id: str, manager: ExtractionManager = Depends(get_e
         message=job.status_message,
         pages_done=job.pages_done,
         pages_total=job.pages_total,
-        page_start=job.page_start,
-        page_end=job.page_end,
     )
 
 

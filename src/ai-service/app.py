@@ -5,8 +5,8 @@ from api.routes import router as extraction_router
 from Config import Config
 from services.pdf_slice_service import PdfSliceService
 from services.gemini_service import GeminiService
-from services.openrouter_service import OpenRouterService
 from services.groq_service import GroqService
+from services.openrouter_service import OpenRouterService
 from Jobs.JobStore import JobStore
 from services.extraction_manager import ExtractionManager
 
@@ -28,17 +28,24 @@ if not config.GEMINI_API_KEY:
 logger.info("Initializing system services and dependencies...")
 pdf_service = PdfSliceService(logger)
 gemini_service = GeminiService(config, logger)
-openrouter_service = OpenRouterService(config, logger)
 groq_service = GroqService(config, logger)
+openrouter_service = OpenRouterService(config, logger)
 job_store = JobStore()
 
-extraction_manager = ExtractionManager(pdf_service, gemini_service, openrouter_service,
-                                       groq_service, job_store, logger, config)
+extraction_manager = ExtractionManager(
+    pdf_service,
+    gemini_service,
+    groq_service,
+    openrouter_service,
+    job_store,
+    logger,
+    config,
+)
 
 app = FastAPI(
     title="Syrian Study Assistant - AI Service",
-    description="Python API for PDF Chunking and LLM Extraction with multi-provider fallback",
-    version="2.2.0",
+    description="Python API for PDF Chunking and Gemini Extraction (pull-based job model)",
+    version="2.0.0",
 )
 
 app.include_router(extraction_router)

@@ -17,15 +17,24 @@ class GroqService:
 
     def __init__(self, config, logger):
         self.logger = logger
-        self.api_key = config.GROQ_API_KEY
-        self.model = config.GROQ_MODEL
-        self.timeout = config.GROQ_TIMEOUT_SECONDS
-        self.enabled = bool(self.api_key)
+        self.api_key = getattr(config, "GROQ_API_KEY", None)
+        self.model = getattr(config, "GROQ_MODEL", "llama-3.1-8b")
+        self.timeout = getattr(config, "GROQ_TIMEOUT_SECONDS", 30)
+        self.enabled = bool(self.api_key and self.api_key != "your-groq-api-key-here")
 
         if self.enabled:
             self.logger.info(f"Groq fallback enabled. Model: {self.model}")
         else:
             self.logger.warning("Groq API key not set. Fallback will be unavailable.")
+
+        # Create HTTP client ONCE, reuse it
+        self.http_client = httpx.Client(
+            timeout=self.timeout,
+            limits=httpx.Limits(
+                max_connections=10,  # Don't overwhelm the API
+                max_keepalive_connections=5,
+            )
+        )
 
     def _extract_json(self, text: str) -> str:
         """Try to extract JSON from text that may contain other content."""
@@ -115,7 +124,7 @@ class GroqService:
             messages.append({"role": "user", "content": prompt})
 
         try:
-            response = httpx.post(
+            response = self.http_client.post(
                 self.API_URL,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",

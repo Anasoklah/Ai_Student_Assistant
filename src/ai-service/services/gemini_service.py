@@ -7,15 +7,9 @@ from services.prompt_builder import PromptBuilder
 
 
 class GeminiService:
-    """
-    Primary extraction service using Google Gemini.
-    Raises Exception with "RESOURCE_EXHAUSTED" on 429 so the caller
-    can fall back to an alternative provider.
-    """
-
     def __init__(self, config, logger):
         self.logger = logger
-        self.model_name = getattr(config, "GEMINI_MODEL", "gemini-1.5-flash")
+        self.model_name = getattr(config, "GEMINI_MODEL", "gemini-2.5-flash")
         self.timeout_ms = getattr(config, "GEMINI_TIMEOUT_SECONDS", 120) * 1000
         self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
@@ -40,28 +34,22 @@ class GeminiService:
             return ExtractionResponse(**data)
 
         except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                self.logger.warning(f"Gemini rate-limited (429) on page {page_number}.")
-                raise Exception("RESOURCE_EXHAUSTED")
-            self.logger.error(f"Gemini processing failed for page {page_number}. Error: {error_str}")
+            self.logger.error(f"Gemini text processing failed for page {page_number}. Error: {str(e)}")
             return ExtractionResponse(
                 success=False,
                 page_number=page_number,
                 concepts=[],
-                error_message=error_str,
+                error_message=str(e),
             )
 
     def extract_concepts_from_image(self, page_number: int, image_bytes: bytes) -> ExtractionResponse:
-        """
-        Sends a page image to Gemini's multimodal API with an extraction prompt.
-        Used as fallback when text extraction yields empty content (scanned/image PDFs).
-        """
+        if not image_bytes:
+            return ExtractionResponse(success=False, page_number=page_number, concepts=[], error_message="No image bytes provided.")
+
         prompt = PromptBuilder.build_image_extraction_prompt()
 
         try:
-            image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
-
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[prompt, image_part],
@@ -76,14 +64,10 @@ class GeminiService:
             return ExtractionResponse(**data)
 
         except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                self.logger.warning(f"Gemini rate-limited (429) on image for page {page_number}.")
-                raise Exception("RESOURCE_EXHAUSTED")
-            self.logger.error(f"Gemini image processing failed for page {page_number}. Error: {error_str}")
+            self.logger.error(f"Gemini vision processing failed for page {page_number}. Error: {str(e)}")
             return ExtractionResponse(
                 success=False,
                 page_number=page_number,
                 concepts=[],
-                error_message=error_str,
+                error_message=str(e),
             )
