@@ -95,10 +95,8 @@ public class AiExtractionClient : IAiExtractionClient
             
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-
                 var conflictContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 throw new InvalidOperationException($"Job is not ready yet: {conflictContent}");
-
             }
             
              errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
