@@ -13,6 +13,7 @@ using SyrianStudyBot.Infrastructure.Ai.Rag;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using Polly;
 using SyrianStudyBot.Features.Auth.UseCases;
 using SyrianStudyBot.Features.Chat.UseCases;
 using SyrianStudyBot.Features.Documents.UseCases;
@@ -24,6 +25,7 @@ using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Infrastructure.Ai.Chat;
 using SyrianStudyBot.Infrastructure.Ai.Embeddings;
 using SyrianStudyBot.Infrastructure.Documents.Pdf;
+using SyrianStudyBot.Infrastructure.Ai.Extraction;
 
 namespace SyrianStudyBot;
 
