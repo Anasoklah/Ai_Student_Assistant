@@ -85,7 +85,7 @@ public class AiExtractionClient : IAiExtractionClient
     public async Task<JobResultResponse> GetJobResultAsync(string jobId, CancellationToken cancellationToken = default)
     {
         var response = await _httpClient.GetAsync($"/api/v1/extraction/jobs/{jobId}/result", cancellationToken);
-        
+        var errorContent = "";
         if (!response.IsSuccessStatusCode)
         {
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -95,11 +95,11 @@ public class AiExtractionClient : IAiExtractionClient
             
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                var conflictContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new InvalidOperationException($"Job is not ready yet: {conflictContent}");
+                 errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new InvalidOperationException($"Job is not ready yet: {errorContent}");
             }
             
-             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+             errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new HttpRequestException($"Failed to get job result: {response.StatusCode} - {errorContent}");
         }
 
