@@ -132,13 +132,19 @@ public class AiExtractionClient : IAiExtractionClient
                 
                 // Convert PageResult to ExtractedPageDto
                 var extractedPages = result.Pages
-                    .Where(p => p.Success && p.Concepts.Any())
+                    .Where(p => p.Success && (p.Concepts.Any() || !string.IsNullOrWhiteSpace(FormatConceptsAsText(p.Concepts))))
                     .Select(p => new ExtractedPageDto
                     {
                         PageNumber = p.PageNumber,
-                        Text = FormatConceptsAsText(p.Concepts)
+                        Text = FormatConceptsAsText(p.Concepts),
+                        Concepts = p.Concepts.Select(c => new ExtractedConceptDto
+                        {
+                            Title = c.Title,
+                            Content = c.Content,
+                            Keywords = c.Keywords ?? new List<string>()
+                        }).ToList()
                     })
-                    .Where(p => !string.IsNullOrWhiteSpace(p.Text))
+                    .Where(p => !string.IsNullOrWhiteSpace(p.Text) || p.Concepts.Any())
                     .ToList();
                 
                 return extractedPages;

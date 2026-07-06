@@ -11,11 +11,6 @@ public class DocumentFileExtractionService(
     ILogger<DocumentFileExtractionService> logger) : IDocumentFileExtractionService
 {
     private const string PdfExtension = ".pdf";
-    private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".txt",
-        ".md"
-    };
 
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
         IFormFile file,
@@ -24,13 +19,10 @@ public class DocumentFileExtractionService(
     {
         var extension = Path.GetExtension(file.FileName);
 
-        if (string.Equals(extension, PdfExtension, StringComparison.OrdinalIgnoreCase))
-            return await ExtractPdfPagesAsync(file, forceVision, cancellationToken);
+        if (!string.Equals(extension, PdfExtension, StringComparison.OrdinalIgnoreCase))
+            throw new BadRequestException("Only PDF files are supported for document ingestion.");
 
-        if (TextExtensions.Contains(extension))
-            return await ExtractTextFileAsync(file, cancellationToken);
-
-        throw new BadRequestException("Only PDF and text files are supported.");
+        return await ExtractPdfPagesAsync(file, forceVision, cancellationToken);
     }
 
     private async Task<IReadOnlyList<ExtractedPageDto>> ExtractPdfPagesAsync(
