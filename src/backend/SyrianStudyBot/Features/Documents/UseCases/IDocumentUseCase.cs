@@ -10,8 +10,6 @@ public interface IDocumentUseCase
 {
     Task<DocumentIngestionResultDto> IngestDocumentAsync(DocumentIngestionRequestDto request, CancellationToken cancellationToken = default);
     Task<DocumentIngestionResultDto> IngestUploadedDocumentAsync(DocumentFileUploadRequestDto request, CancellationToken cancellationToken = default);
-    Task<DocumentIngestionResultDto> UploadStudentDocumentAsync(DocumentIngestionRequestDto request, ApplicationUser user, CancellationToken cancellationToken = default);
-    Task<DocumentIngestionResultDto> UploadStudentDocumentFileAsync(DocumentFileUploadRequestDto request, ApplicationUser user, CancellationToken cancellationToken = default);
     Task<DocumentIngestionResultDto> SetApprovalAsync(Guid documentId, bool approve, CancellationToken cancellationToken = default);
     Task<PagedResponse<DocumentIngestionResultDto>> GetApprovedDocumentsAsync(Subject? subject, GradeLevel? gradeLevel, int page, int pageSize, CancellationToken cancellationToken = default);
     Task<PagedResponse<DocumentIngestionResultDto>> GetDocumentsForAdminAsync(bool? isApproved, int page, int pageSize, CancellationToken cancellationToken = default);

@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Polly;
+using Polly.Extensions.Http;
 using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Features.Auth.Services;
 using SyrianStudyBot.Features.Auth.Services.BackgroundJobs;
@@ -24,6 +26,7 @@ using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Infrastructure.Ai.Chat;
 using SyrianStudyBot.Infrastructure.Ai.Embeddings;
 using SyrianStudyBot.Infrastructure.Documents.Pdf;
+using SyrianStudyBot.Infrastructure.Ai.Extraction;
 
 namespace SyrianStudyBot;
 
@@ -42,8 +45,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
-        services.AddSingleton<IPdfVisionExtractorService, PdfVisionExtractorService>();
-        services.AddSingleton<IPdfTextExtractorService, PdfTextExtractorService>();
         services.AddScoped<IDocumentFileExtractionService, DocumentFileExtractionService>();
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
@@ -173,7 +174,6 @@ public static class ServiceCollectionExtensions
         var baseUrl = aiServiceConfig["BaseUrl"] ?? "http://localhost:8000";
         var pollingIntervalSeconds = int.Parse(aiServiceConfig["PollingIntervalSeconds"] ?? "5");
         var timeoutMinutes = int.Parse(aiServiceConfig["TimeoutMinutes"] ?? "30");
-        var enabled = bool.Parse(aiServiceConfig["Enabled"] ?? "false");
 
         // Register the HttpClient with Polly policies
         services.AddHttpClient("AiExtractionClient", (sp, client) =>
@@ -181,8 +181,10 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromMinutes(timeoutMinutes);
         })
-        .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)))
-        .AddTransientHttpErrorPolicy(policy => policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+        .AddPolicyHandler(HttpPolicyExtensions.HandleTransientHttpError()
+            .WaitAndRetryAsync(3, _ => TimeSpan.FromSeconds(2)))
+        .AddPolicyHandler(HttpPolicyExtensions.HandleTransientHttpError()
+            .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
 
         // Register the client wrapper
         services.AddSingleton<IAiExtractionClient>(sp =>
@@ -197,11 +199,8 @@ public static class ServiceCollectionExtensions
             );
         });
 
-        // Conditionally register the extraction service based on configuration
-        if (enabled)
-        {
-            services.AddSingleton<IPdfTextExtractorService, AiServiceExtractionService>();
-        }
+        // Use Python AI service as the only PDF extraction engine.
+        services.AddSingleton<IPdfTextExtractorService, AiServiceExtractionService>();
 
         return services;
     }

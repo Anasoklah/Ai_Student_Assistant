@@ -1,18 +1,15 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using SyrianStudyBot.Features.Documents.Mappers;
-using SyrianStudyBot.Infrastructure.Common;
 using SyrianStudyBot.Infrastructure.Documents.Validation;
 using SyrianStudyBot.Infrastructure.Documents;
 using SyrianStudyBot.Infrastructure.Persistence;
-using SyrianStudyBot.Domain;
-using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Features.Common.Dtos;
 using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Infrastructure.Common;
+using Microsoft.Extensions.Options;
 
 namespace SyrianStudyBot.Features.Documents.UseCases;
 
@@ -20,7 +17,6 @@ public class DocumentUseCase : IDocumentUseCase
 {
     private readonly AppDbContext _db;
     private readonly IDocumentIngestionService _ingestion;
-    private readonly IUsageTrackingService _usageTrackingService;
     private readonly IDocumentRequestService _documentRequestService;
     private readonly IPagingService _pagingService;
     private readonly IDocumentIngestionValidator _documentValidator;
@@ -30,7 +26,6 @@ public class DocumentUseCase : IDocumentUseCase
     public DocumentUseCase(
         AppDbContext db,
         IDocumentIngestionService ingestion,
-        IUsageTrackingService usageTrackingService,
         IDocumentRequestService documentRequestService,
         IPagingService pagingService,
         IDocumentIngestionValidator documentValidator,
@@ -39,7 +34,6 @@ public class DocumentUseCase : IDocumentUseCase
     {
         _db = db;
         _ingestion = ingestion;
-        _usageTrackingService = usageTrackingService;
         _documentRequestService = documentRequestService;
         _pagingService = pagingService;
         _documentValidator = documentValidator;
@@ -68,55 +62,8 @@ public class DocumentUseCase : IDocumentUseCase
         return DocumentMappers.MapDocument(document);
     }
 
-    public async Task<DocumentIngestionResultDto> UploadStudentDocumentAsync(DocumentIngestionRequestDto request, ApplicationUser user, CancellationToken cancellationToken = default)
-    {
-        _usageTrackingService.ResetUploadCounterIfNeeded(user);
-        if (!SubscriptionRules.CanUpload(user.SubscriptionTier))
-            throw new ForbiddenException("Upload forbidden");
-
-            var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
-            if (user.UploadsThisMonth >= monthlyLimit)
-                throw new RateLimitExceededException("Monthly upload limit reached");
-
-            var studentRequest = _documentRequestService.CreateStudentRequest(request, user.Id);
-        var document = await _ingestion.IngestAsync(studentRequest, cancellationToken);
-
-        user.UploadsThisMonth++;
-        await _usageTrackingService.UpsertUploadUsageAsync(user.Id, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return DocumentMappers.MapDocument(document);
-    }
-
-    public async Task<DocumentIngestionResultDto> UploadStudentDocumentFileAsync(DocumentFileUploadRequestDto request, ApplicationUser user, CancellationToken cancellationToken = default)
-    {
-        _usageTrackingService.ResetUploadCounterIfNeeded(user);
-        if (!SubscriptionRules.CanUpload(user.SubscriptionTier))
-            throw new ForbiddenException("Upload forbidden");
-
-            var monthlyLimit = SubscriptionRules.GetMonthlyUploadLimit(user.SubscriptionTier);
-            if (user.UploadsThisMonth >= monthlyLimit)
-                throw new RateLimitExceededException("Monthly upload limit reached");
-
-            var fileSizeLimit = SubscriptionRules.GetMaxUploadFileSizeBytes(user.SubscriptionTier);
-            var validationError = _documentValidator.ValidateFileUploadRequest(request, fileSizeLimit);
-            if (validationError is not null)
-                throw new BadRequestException(validationError);
-
-        var pages = await _fileExtractionService.ExtractPagesAsync(request.File, request.ForceVision, cancellationToken);
-        var ingestionRequest = _documentRequestService.CreateStudentFileRequest(request, user.Id, pages);
-        ValidateReadablePages(ingestionRequest);
-
-        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-        var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
-
-        user.UploadsThisMonth++;
-        await _usageTrackingService.UpsertUploadUsageAsync(user.Id, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return DocumentMappers.MapDocument(document);
-    }
+    // Student upload methods are intentionally removed for this phase.
+    // We focus on admin upload ingestion only and will restore student upload support later.
 
     public async Task<DocumentIngestionResultDto> SetApprovalAsync(Guid documentId, bool approve, CancellationToken cancellationToken = default)
     {

@@ -34,11 +34,8 @@ public class DocumentIngestionService(
             IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
         };
 
-        var segments = SplitIntoSegments(requestDto.Pages);
-        logger.LogInformation("Detected {Count} text segments across sections", segments.Count);
-
-        var chunks = segments.SelectMany(SplitSegmentIntoChunks).ToList();
-        logger.LogInformation("Split into {Count} chunks", chunks.Count);
+        var chunks = BuildChunksFromExtractionResults(requestDto.Pages);
+        logger.LogInformation("Built {Count} chunks from extraction results", chunks.Count);
 
         var embeddings = await embeddingService.GenerateEmbeddingsAsync(
             chunks.Select(c => c.Text).ToList(), cancellationToken);
@@ -66,85 +63,71 @@ public class DocumentIngestionService(
         return document;
     }
 
-    private enum HeadingLevel { None, Chapter, Section }
-
-    private static HeadingLevel DetectHeadingLevel(string line)
+    private static List<SegmentChunk> BuildChunksFromExtractionResults(IReadOnlyList<ExtractedPageDto> pages)
     {
-        if (line.StartsWith("## ")) return HeadingLevel.Section;
-        if (line.StartsWith("# ") && !line.StartsWith("## ")) return HeadingLevel.Chapter;
-
-        if (Regex.IsMatch(line, @"^(الفصل|الوحدة|الباب|المحور)\s"))
-            return HeadingLevel.Chapter;
-
-        if (Regex.IsMatch(line, @"^(الدرس|درس)\s"))
-            return HeadingLevel.Section;
-
-        return HeadingLevel.None;
-    }
-
-    private static string StripHeadingPrefix(string line)
-    {
-        if (line.StartsWith("## ")) return line[3..].Trim();
-        if (line.StartsWith("# "))  return line[2..].Trim();
-        return line.Trim();
-    }
-
-    private record TextSegment(int PageNumber, string? ChapterTitle, string? SectionTitle, string Text);
-
-    private static List<TextSegment> SplitIntoSegments(IReadOnlyList<ExtractedPageDto> pages)
-    {
-        var segments = new List<TextSegment>();
-        string? currentChapter = null;
-        string? currentSection = null;
-        var currentLines = new List<string>();
-        int currentPageNumber = pages.Count > 0 ? pages[0].PageNumber : 1;
+        var chunks = new List<SegmentChunk>();
 
         foreach (var page in pages)
         {
-            var lines = page.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var rawLine in lines)
+            var pageChunks = BuildChunksFromPage(page);
+            if (pageChunks.Count == 0 && !string.IsNullOrWhiteSpace(page.Text))
             {
-                var line = rawLine.Trim();
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                var level = DetectHeadingLevel(line);
-
-                if (level == HeadingLevel.Chapter)
-                {
-                    FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
-                    currentChapter = StripHeadingPrefix(line);
-                    currentSection = null;
-                }
-                else if (level == HeadingLevel.Section)
-                {
-                    FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
-                    currentSection = StripHeadingPrefix(line);
-                }
-                else
-                {
-                    currentLines.Add(line);
-                    currentPageNumber = page.PageNumber;
-                }
+                pageChunks = SplitTextIntoChunks(page.PageNumber, null, null, page.Text);
             }
+
+            chunks.AddRange(pageChunks);
         }
 
-        FlushSegment(segments, currentLines, currentPageNumber, currentChapter, currentSection);
-        return segments;
+        return chunks;
     }
 
-    private static void FlushSegment(
-        List<TextSegment> segments,
-        List<string> lines,
-        int pageNumber,
-        string? chapter,
-        string? section)
+    private static List<SegmentChunk> BuildChunksFromPage(ExtractedPageDto page)
     {
-        if (lines.Count == 0) return;
-        var text = string.Join(" ", lines);
-        if (!string.IsNullOrWhiteSpace(text))
-            segments.Add(new TextSegment(pageNumber, chapter, section, text));
-        lines.Clear();
+        if (page.Concepts.Count == 0)
+            return new List<SegmentChunk>();
+
+        return page.Concepts
+            .SelectMany(concept => BuildChunksFromConcept(page.PageNumber, concept))
+            .ToList();
+    }
+
+    private static IEnumerable<SegmentChunk> BuildChunksFromConcept(int pageNumber, ExtractedConceptDto concept)
+    {
+        var content = concept.Content?.Trim();
+        if (string.IsNullOrWhiteSpace(content))
+            return Enumerable.Empty<SegmentChunk>();
+
+        var chapterTitle = TryExtractChapterTitle(concept.Title);
+        var sectionTitle = TryExtractSectionTitle(concept.Title);
+        var title = concept.Title?.Trim();
+
+        if (chapterTitle is not null)
+            return SplitTextIntoChunks(pageNumber, chapterTitle, null, content);
+
+        if (sectionTitle is not null)
+            return SplitTextIntoChunks(pageNumber, null, sectionTitle, content);
+
+        return SplitTextIntoChunks(pageNumber, null, title, content);
+    }
+
+    private static string? TryExtractChapterTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+
+        return Regex.IsMatch(title.Trim(), "^(الفصل|الوحدة|الباب|المحور)", RegexOptions.IgnoreCase)
+            ? title.Trim()
+            : null;
+    }
+
+    private static string? TryExtractSectionTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+
+        return Regex.IsMatch(title.Trim(), "^(الدرس|درس)", RegexOptions.IgnoreCase)
+            ? title.Trim()
+            : null;
     }
 
     private sealed record SegmentChunk(
@@ -155,21 +138,21 @@ public class DocumentIngestionService(
         int StartWord,
         int EndWord);
 
-    private static List<SegmentChunk> SplitSegmentIntoChunks(TextSegment segment)
+    private static List<SegmentChunk> SplitTextIntoChunks(int pageNumber, string? chapterTitle, string? sectionTitle, string content)
     {
-        var words = segment.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var chunks = new List<SegmentChunk>();
+        var words = content.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         int step = ChunkSize - ChunkOverlap;
         int start = 0;
 
         while (start < words.Length)
         {
-            int end = Math.Min(start + ChunkSize, words.Length);
-            string chunkText = string.Join(' ', words[start..end]);
+            var end = Math.Min(start + ChunkSize, words.Length);
+            var chunkText = string.Join(' ', words[start..end]);
             chunks.Add(new SegmentChunk(
-                segment.PageNumber,
-                segment.ChapterTitle,
-                segment.SectionTitle,
+                pageNumber,
+                chapterTitle,
+                sectionTitle,
                 chunkText,
                 start,
                 end - 1));

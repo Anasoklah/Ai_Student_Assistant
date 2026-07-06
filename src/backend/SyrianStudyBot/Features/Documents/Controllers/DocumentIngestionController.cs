@@ -17,22 +17,8 @@ namespace SyrianStudyBot.Features.Documents.Controllers;
 [RequestSizeLimit(200L * 1024 * 1024)]
 [Route("api/documents")]
 public class DocumentIngestionController(
-    IDocumentUseCase documentUseCase,
-    UserManager<ApplicationUser> userManager,
-    IDocumentIngestionValidator documentValidator) : ControllerBase
+    IDocumentUseCase documentUseCase) : ControllerBase
 {
-    [HttpPost]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> IngestDocument([FromBody] DocumentIngestionRequestDto request, CancellationToken cancellationToken)
-    {
-        var validationError = documentValidator.ValidateIngestionRequest(request);
-        if (validationError is not null)
-            return BadRequest(new { message = validationError });
-
-        var document = await documentUseCase.IngestDocumentAsync(request, cancellationToken);
-        return Ok(document);
-    }
-
     [HttpPost("upload")]
     [Authorize(Policy = "AdminOnly")]
     [Consumes("multipart/form-data")]
@@ -42,42 +28,8 @@ public class DocumentIngestionController(
         return Ok(document);
     }
 
-    [HttpPost("student-upload")]
-    [Authorize(Policy = "StudentOnly")]
-    public async Task<IActionResult> UploadStudentDocument([FromBody] DocumentIngestionRequestDto request, CancellationToken cancellationToken)
-    {
-        var validationError = documentValidator.ValidateIngestionRequest(request);
-        if (validationError is not null)
-            return BadRequest(new { message = validationError });
+    // Student upload endpoints are removed for this phase. Admin upload is the only supported ingestion flow.
 
-        var userId = User.GetUserId();
-        if (userId == Guid.Empty)
-            return Unauthorized(new { message = "User not authenticated" });
-
-        var user = await userManager.FindByIdAsync(userId.ToString());
-        if (user is null)
-            return Unauthorized(new { message = "User not authenticated" });
-
-        var document = await documentUseCase.UploadStudentDocumentAsync(request, user, cancellationToken);
-        return Ok(document);
-    }
-
-    [HttpPost("student-upload/file")]
-    [Authorize(Policy = "StudentOnly")]
-    [Consumes("multipart/form-data")]
-    public async Task<IActionResult> UploadStudentDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
-    {
-        var userId = User.GetUserId();
-        if (userId == Guid.Empty)
-            return Unauthorized(new { message = "User not authenticated" });
-
-        var user = await userManager.FindByIdAsync(userId.ToString());
-        if (user is null)
-            return Unauthorized(new { message = "User not authenticated" });
-
-        var document = await documentUseCase.UploadStudentDocumentFileAsync(request, user, cancellationToken);
-        return Ok(document);
-    }
 
     [HttpPost("{documentId:guid}/approval")]
     [Authorize(Policy = "AdminOnly")]
