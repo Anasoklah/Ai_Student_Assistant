@@ -25,7 +25,7 @@ public class AiExtractionClient : IAiExtractionClient
     }
 
     public async Task<JobAcceptedResponse> SubmitExtractionJobAsync(
-        byte[] pdfBytes,
+        Stream pdfStream,
         string bookId,
         int? startPage = null,
         int? endPage = null,
@@ -33,7 +33,7 @@ public class AiExtractionClient : IAiExtractionClient
     {
         using var formData = new MultipartFormDataContent();
         
-        var fileContent = new ByteArrayContent(pdfBytes);
+        var fileContent = new StreamContent(pdfStream);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         formData.Add(fileContent, "file", "document.pdf");
         

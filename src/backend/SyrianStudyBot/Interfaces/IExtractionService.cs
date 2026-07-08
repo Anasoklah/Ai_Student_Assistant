@@ -5,8 +5,8 @@ namespace SyrianStudyBot.Interfaces;
 public interface IExtractionService
 {
     Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
-        byte[] pdfBytes,
-        int? statPage,
-        int? EndPage,
+        Stream pdfStream,
+        int? startPage,
+        int? endPage,
         CancellationToken cancellationToken = default);
 }

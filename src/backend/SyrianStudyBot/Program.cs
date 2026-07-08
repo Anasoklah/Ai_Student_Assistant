@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using SyrianStudyBot;
 using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Infrastructure.ExceptionHandling;
+using Microsoft.AspNetCore.Identity;
 
 // Load .env file before builder creation so its values are picked up
 // by the environment-variables configuration source.
@@ -87,7 +88,9 @@ builder.Services.AddAiExtractionClient(builder.Configuration);
 
 var app = builder.Build();
 
-await SeedIdentityRolesAsync(app.Services);
+// Seed data
+await ServiceCollectionExtensions.SeedRoles(app.Services);
+await ServiceCollectionExtensions.SeedAdminUser(app.Services);
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
@@ -104,14 +107,4 @@ app.MapControllers();
 
 app.Run();
 
-static async Task SeedIdentityRolesAsync(IServiceProvider services)
-{
-    using var scope = services.CreateScope();
-    var roleManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole<Guid>>>();
 
-    foreach (var role in new[] { "Admin", "Student" })
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole<Guid>(role));
-    }
-}

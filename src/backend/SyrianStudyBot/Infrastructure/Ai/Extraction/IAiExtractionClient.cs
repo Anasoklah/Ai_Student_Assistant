@@ -6,7 +6,7 @@ namespace SyrianStudyBot.Infrastructure.Ai.Extraction;
 public interface IAiExtractionClient
 {
     Task<JobAcceptedResponse> SubmitExtractionJobAsync(
-        byte[] pdfBytes,
+        Stream pdfStream,
         string bookId,
         int? pageStart = null ,
         int? pageEnd = null,

@@ -13,25 +13,24 @@ public class ExtractionService(
     ILogger<ExtractionService> logger) : IExtractionService
 {
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
-        byte[] pdfBytes,
+        Stream pdfStream,
         int? startPage,
-        int? EndPage,
+        int? endPage,
         CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("Starting AI service extraction for PDF ({Size} bytes)", pdfBytes.Length);
+        logger.LogInformation("Starting AI service extraction for PDF (stream)");
         
         // Generate a book_id for this extraction session
-        // In a real scenario, this would come from the database
         var bookId = Guid.NewGuid().ToString();
         
         try
         {
-            // Submit the extraction job to the AI service
+            // Submit the extraction job to the AI service (streaming, no byte[] buffer)
             var jobAccepted = await aiExtractionClient.SubmitExtractionJobAsync(
-                pdfBytes,
+                pdfStream,
                 bookId,
                 pageStart: startPage,
-                pageEnd: EndPage,
+                pageEnd: endPage,
                 cancellationToken);
             
             logger.LogInformation("Job {JobId} accepted for book {BookId}", jobAccepted.JobId, bookId);
@@ -47,7 +46,7 @@ public class ExtractionService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "AI service extraction failed for PDF ({Size} bytes)", pdfBytes.Length);
+            logger.LogError(ex, "AI service extraction failed for PDF (stream)");
             throw;
         }
     }

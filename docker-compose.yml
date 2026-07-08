@@ -69,6 +69,8 @@ services:
       Email__Password: ${Email__Password:-}
       Ollama__BaseUrl: http://host.docker.internal:11434
       Ollama__EmbeddingModel: ${Ollama__EmbeddingModel:-nomic-embed-text}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     ports:
       - "8080:8080"
@@ -86,4 +88,3 @@ volumes:
 networks:
   app-network:
     driver: bridge
-

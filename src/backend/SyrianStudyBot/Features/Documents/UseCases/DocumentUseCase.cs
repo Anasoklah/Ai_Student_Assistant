@@ -48,11 +48,11 @@ public class DocumentUseCase : IDocumentUseCase
         if (validationError is not null)
             throw new BadRequestException(validationError);
 
-        var fileBytes = await GetFileBytesAsync(request.File, cancellationToken);
-        var pages = await _ExtractionService.ExtractPagesAsync(fileBytes,
-        request.StartPage ,
-         request.EndPage,
-          cancellationToken);
+        var pages = await _ExtractionService.ExtractPagesAsync(
+            request.File.OpenReadStream(),
+            request.StartPage,
+            request.EndPage,
+            cancellationToken);
         var ingestionRequest = DocumentMappers.ToIngestionCommand(request, pages , _userContext.GetCurrentUserId());
         ValidateReadablePages(ingestionRequest);
 
@@ -124,14 +124,6 @@ public class DocumentUseCase : IDocumentUseCase
             PageSize = pageSize,
             TotalCount = total
         };
-    }
-
-    private static async Task<byte[]> GetFileBytesAsync(IFormFile file, CancellationToken cancellationToken)
-    {
-        await using var stream = file.OpenReadStream();
-        using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream, cancellationToken);
-        return memoryStream.ToArray();
     }
 
     private void ValidateReadablePages(DocumentIngestionCommand request)
