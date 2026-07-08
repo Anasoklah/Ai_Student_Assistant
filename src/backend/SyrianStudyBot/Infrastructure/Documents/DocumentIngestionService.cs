@@ -4,6 +4,7 @@ using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.Documents.Mappers;
 
 namespace SyrianStudyBot.Infrastructure.Documents;
 
@@ -15,24 +16,11 @@ public class DocumentIngestionService(
     private const int ChunkSize = 150;
     private const int ChunkOverlap = 20;
 
-    public async Task<Document> IngestAsync(DocumentIngestionRequestDto requestDto, CancellationToken cancellationToken = default)
+    public async Task<Document> IngestAsync(DocumentIngestionCommand requestDto, CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Starting ingestion for document '{Title}' (subject: {Subject})", requestDto.Title, requestDto.Subject);
 
-        var document = new Document
-        {
-            Title = requestDto.Title,
-            Subject = requestDto.Subject,
-            GradeLevel = requestDto.GradeLevel,
-            SourceName = requestDto.SourceName,
-            Edition = requestDto.Edition,
-            Language = requestDto.Language,
-            DocumentType = requestDto.DocumentType,
-            UploadedByUserId = requestDto.UploadedByUserId,
-            FileSizeBytes = requestDto.FileSizeBytes,
-            FilePath = requestDto.FilePath,
-            IsApproved = requestDto.DocumentType == Domain.Enums.DocumentType.OfficialBook
-        };
+        var document = DocumentMappers.ToEntity(requestDto);
 
         var chunks = BuildChunksFromExtractionResults(requestDto.Pages);
         logger.LogInformation("Built {Count} chunks from extraction results", chunks.Count);

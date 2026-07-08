@@ -18,8 +18,6 @@ public class Document
     public ApplicationUser? UploadedByUser { get; set; }
     public bool IsApproved { get; set; } = true;  // Admin approval for student uploads
     public long FileSizeBytes { get; set; }
-    public string? FilePath { get; set; }  // Storage path
-
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public List<DocumentChunk> Chunks { get; set; } = [];
 }

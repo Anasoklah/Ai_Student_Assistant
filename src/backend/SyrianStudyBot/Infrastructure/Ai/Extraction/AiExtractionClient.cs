@@ -27,8 +27,8 @@ public class AiExtractionClient : IAiExtractionClient
     public async Task<JobAcceptedResponse> SubmitExtractionJobAsync(
         byte[] pdfBytes,
         string bookId,
-        int pageStart = 1,
-        int? pageEnd = null,
+        int? startPage = null,
+        int? endPage = null,
         CancellationToken cancellationToken = default)
     {
         using var formData = new MultipartFormDataContent();
@@ -38,12 +38,11 @@ public class AiExtractionClient : IAiExtractionClient
         formData.Add(fileContent, "file", "document.pdf");
         
         formData.Add(new StringContent(bookId), "book_id");
-        formData.Add(new StringContent(pageStart.ToString()), "page_start");
-        
-        if (pageEnd.HasValue)
-        {
-            formData.Add(new StringContent(pageEnd.Value.ToString()), "page_end");
-        }
+        if(startPage.HasValue)
+           formData.Add(new StringContent(startPage.ToString()), "start_page");
+
+        if(endPage.HasValue)
+           formData.Add(new StringContent(endPage.ToString()), "end_page");
 
         var response = await _httpClient.PostAsync("/api/v1/extraction/extract-pdf-async", formData, cancellationToken);
         
@@ -112,7 +111,6 @@ public class AiExtractionClient : IAiExtractionClient
 
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
-        Func<Task>? beforeVisionExtraction = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();

@@ -4,6 +4,6 @@ namespace SyrianStudyBot.Infrastructure.Documents.Validation;
 
 public interface IDocumentIngestionValidator
 {
-    string? ValidateIngestionRequest(DocumentIngestionRequestDto request);
-    string? ValidateFileUploadRequest(DocumentFileUploadRequestDto request, long maxFileSizeBytes);
+    string? ValidateIngestionRequest(DocumentIngestionCommand request);
+    string? ValidateFileUploadRequest(UploadDocumentRequest request, long maxFileSizeBytes);
 }

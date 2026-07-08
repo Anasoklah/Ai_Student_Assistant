@@ -2,10 +2,11 @@ using SyrianStudyBot.Features.Documents.Dtos;
 
 namespace SyrianStudyBot.Interfaces;
 
-public interface IDocumentFileExtractionService
+public interface IExtractionService
 {
     Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
-        Microsoft.AspNetCore.Http.IFormFile file,
-        bool forceVision,
+        byte[] pdfBytes,
+        int? statPage,
+        int? EndPage,
         CancellationToken cancellationToken = default);
 }

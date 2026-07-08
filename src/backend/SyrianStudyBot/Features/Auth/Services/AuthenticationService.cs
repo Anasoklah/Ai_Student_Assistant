@@ -75,22 +75,15 @@ public class AuthenticationService(
             PreferredLanguage = "ar"
         };
 
-        await using var transaction = await _db.Database.BeginTransactionAsync();
-
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
-        {
-            await transaction.RollbackAsync();
             throw new BadRequestException(string.Join(Environment.NewLine, result.Errors.Select(e => e.Description)));
-        }
 
         await _userManager.AddToRoleAsync(user, "Student");
 
         var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(await _userManager.GenerateEmailConfirmationTokenAsync(user)));
         var verificationLink = $"{_configuration["AppUrl"]}/api/auth/verifyEmail?token={token}&userId={user.Id}";
         await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
-
-        await transaction.CommitAsync();
 
         return "Registration successful! We've sent a confirmation link to your email. Please check your inbox (and spam folder) to activate your account.";
     }

@@ -22,7 +22,7 @@ public class DocumentIngestionController(
     [HttpPost("upload")]
     [Authorize(Policy = "AdminOnly")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] UploadDocumentRequest request, CancellationToken cancellationToken)
     {
         var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
         return Ok(document);
@@ -41,7 +41,7 @@ public class DocumentIngestionController(
 
     [HttpGet]
     [Authorize(Policy = "StudentOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentIngestionResultDto>>> GetApprovedDocuments(
+    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetApprovedDocuments(
         [FromQuery] Subject? subject,
         [FromQuery] GradeLevel? gradeLevel,
         [FromQuery] int page = 1,
@@ -54,7 +54,7 @@ public class DocumentIngestionController(
 
     [HttpGet("admin")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentIngestionResultDto>>> GetDocumentsForAdmin(
+    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetDocumentsForAdmin(
         [FromQuery] bool? isApproved,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,

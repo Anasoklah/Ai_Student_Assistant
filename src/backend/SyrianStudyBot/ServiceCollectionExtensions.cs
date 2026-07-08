@@ -15,7 +15,6 @@ using SyrianStudyBot.Infrastructure.Ai.Rag;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
-using Polly;
 using SyrianStudyBot.Features.Auth.UseCases;
 using SyrianStudyBot.Features.Chat.UseCases;
 using SyrianStudyBot.Features.Documents.UseCases;
@@ -39,14 +38,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
-        services.AddScoped<IDocumentRequestService, DocumentRequestService>();
         return services;
     }
 
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
-        services.AddScoped<IDocumentFileExtractionService, DocumentFileExtractionService>();
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
@@ -201,7 +198,7 @@ public static class ServiceCollectionExtensions
         });
 
         // Use Python AI service as the only PDF extraction engine.
-        services.AddSingleton<IPdfTextExtractorService, AiServiceExtractionService>();
+        services.AddSingleton<IExtractionService, ExtractionService>();
 
         return services;
     }

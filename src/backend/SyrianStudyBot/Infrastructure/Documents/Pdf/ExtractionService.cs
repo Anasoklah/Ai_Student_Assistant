@@ -8,14 +8,14 @@ namespace SyrianStudyBot.Infrastructure.Documents.Pdf;
 /// Implementation of IPdfTextExtractorService that delegates PDF extraction to the external AI service.
 /// This service submits the PDF to the AI service, polls for completion, and returns the extracted pages.
 /// </summary>
-public class AiServiceExtractionService(
+public class ExtractionService(
     IAiExtractionClient aiExtractionClient,
-    ILogger<AiServiceExtractionService> logger) : IPdfTextExtractorService
+    ILogger<ExtractionService> logger) : IExtractionService
 {
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
         byte[] pdfBytes,
-        bool forceVision,
-        Func<Task> beforeVisionExtraction,
+        int? startPage,
+        int? EndPage,
         CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Starting AI service extraction for PDF ({Size} bytes)", pdfBytes.Length);
@@ -30,8 +30,8 @@ public class AiServiceExtractionService(
             var jobAccepted = await aiExtractionClient.SubmitExtractionJobAsync(
                 pdfBytes,
                 bookId,
-                pageStart: 1,
-                pageEnd: null,
+                pageStart: startPage,
+                pageEnd: EndPage,
                 cancellationToken);
             
             logger.LogInformation("Job {JobId} accepted for book {BookId}", jobAccepted.JobId, bookId);
@@ -39,7 +39,6 @@ public class AiServiceExtractionService(
             // Poll for completion and get the results
             var extractedPages = await aiExtractionClient.ExtractPagesFromJobAsync(
                 jobAccepted.JobId,
-                beforeVisionExtraction,
                 cancellationToken);
             
             logger.LogInformation("Successfully extracted {Count} pages from AI service", extractedPages.Count);
@@ -52,4 +51,6 @@ public class AiServiceExtractionService(
             throw;
         }
     }
+
+  
 }

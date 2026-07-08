@@ -18,7 +18,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("Postgres"),
-        o => o.UseVector());
+        o => {
+            o.UseVector();
+            o.EnableRetryOnFailure(
+                maxRetryCount: 10,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
 });
 
 #region Exception Handler

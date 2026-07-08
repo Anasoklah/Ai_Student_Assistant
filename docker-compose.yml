@@ -2,9 +2,11 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: syrianstudybot-db
+    env_file:
+      - ./.env
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
-      POSTGRES_DB: studybot_phase3
+      POSTGRES_DB: ${POSTGRES_DB:-studybot_phase3}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -14,19 +16,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   ai-service:
     build:
       context: ./src/ai-service
       dockerfile: Dockerfile
     container_name: syrianstudybot-ai-service
+    env_file:
+      - ./.env
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - PROVIDER_PRIORITY=${PROVIDER_PRIORITY:-gemini,groq,openrouter}
-      - PROVIDER_RETRY_COUNT=${PROVIDER_RETRY_COUNT:-1}
-      - MAX_UPLOAD_SIZE_BYTES=${MAX_UPLOAD_SIZE_BYTES:-52428800}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      PROVIDER_PRIORITY: ${PROVIDER_PRIORITY:-gemini,groq,openrouter}
+      PROVIDER_RETRY_COUNT: ${PROVIDER_RETRY_COUNT:-1}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-52428800}
     ports:
       - "8000:8000"
     healthcheck:
@@ -43,16 +49,27 @@ services:
       context: ./src/backend
       dockerfile: SyrianStudyBot/Dockerfile
     container_name: syrianstudybot-backend
+    env_file:
+      - ./.env
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=studybot_phase3;Username=postgres;Password=${DB_PASSWORD:-dev_password}
-      - AiService__BaseUrl=http://ai-service:8000
-      - AiService__PollingIntervalSeconds=5
-      - AiService__TimeoutMinutes=30
-      - AiService__Enabled=${AI_SERVICE_ENABLED:-false}
-      - Jwt__Secret=${Jwt__Secret:-your-secret-key-at-least-32-characters}
-      - Jwt__Issuer=${Jwt__Issuer:-YourApp}
-      - Jwt__Audience=${Jwt__Audience:-YourAppUsers}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=studybot_phase3;Username=postgres;Password=${DB_PASSWORD:-dev_password}
+      AiService__BaseUrl: http://ai-service:8000
+      AiService__PollingIntervalSeconds: ${AiService__PollingIntervalSeconds:-5}
+      AiService__TimeoutMinutes: ${AiService__TimeoutMinutes:-30}
+      AiService__Enabled: ${AiService__Enabled:-false}
+      Jwt__Secret: ${Jwt__Secret:-}
+      Jwt__Issuer: ${Jwt__Issuer:-YourApp}
+      Jwt__Audience: ${Jwt__Audience:-YourAppUsers}
+      Email__SmtpHost: ${Email__SmtpHost:-smtp.gmail.com}
+      Email__SmtpPort: ${Email__SmtpPort:-587}
+      Email__FromEmail: ${Email__FromEmail:-}
+      Email__FromName: ${Email__FromName:-Syrian Study Bot}
+      Email__Password: ${Email__Password:-}
+      Ollama__BaseUrl: http://host.docker.internal:11434
+      Ollama__EmbeddingModel: ${Ollama__EmbeddingModel:-nomic-embed-text}
+
     ports:
       - "8080:8080"
     depends_on:
