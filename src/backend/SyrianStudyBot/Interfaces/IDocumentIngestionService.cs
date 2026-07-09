@@ -5,5 +5,5 @@ namespace SyrianStudyBot.Interfaces;
 
 public interface IDocumentIngestionService
 {
-    Task<Document> IngestAsync(DocumentIngestionRequestDto requestDto, CancellationToken cancellationToken = default);
+    Task<Document> IngestAsync(DocumentIngestionCommand requestDto, CancellationToken cancellationToken = default);
 }

@@ -8,10 +8,14 @@ public class DocumentIngestionValidator : IDocumentIngestionValidator
     {
         ".pdf",
         ".txt",
-        ".md"
+        ".md",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
     };
 
-    public string? ValidateIngestionRequest(DocumentIngestionRequestDto request)
+    public string? ValidateIngestionRequest(DocumentIngestionCommand request)
     {
         if (request is null)
             return "Request body is required.";
@@ -25,7 +29,7 @@ public class DocumentIngestionValidator : IDocumentIngestionValidator
         return null;
     }
 
-    public string? ValidateFileUploadRequest(DocumentFileUploadRequestDto request, long maxFileSizeBytes)
+    public string? ValidateFileUploadRequest(UploadDocumentRequest request, long maxFileSizeBytes)
     {
         if (request is null)
             return "Request body is required.";

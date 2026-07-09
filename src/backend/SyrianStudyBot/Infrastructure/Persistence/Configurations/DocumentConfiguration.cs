@@ -32,7 +32,6 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(e => e.SourceName).HasMaxLength(300);
         builder.Property(e => e.Edition).HasMaxLength(100);
         builder.Property(e => e.Language).HasMaxLength(20);
-        builder.Property(e => e.FilePath).HasMaxLength(1000);
 
         builder.HasMany(e => e.Chunks)
             .WithOne(e => e.Document)

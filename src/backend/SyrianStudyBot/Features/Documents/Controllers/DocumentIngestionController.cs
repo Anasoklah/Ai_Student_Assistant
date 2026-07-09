@@ -1,11 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Features.Documents.UseCases;
-using SyrianStudyBot.Infrastructure.Documents.Validation;
-using SyrianStudyBot.Infrastructure.Identity;
-using SyrianStudyBot.Domain;
-using SyrianStudyBot.Domain.Entities;
+
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Features.Common.Dtos;
@@ -22,7 +18,7 @@ public class DocumentIngestionController(
     [HttpPost("upload")]
     [Authorize(Policy = "AdminOnly")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] DocumentFileUploadRequestDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadAdminDocumentFile([FromForm] UploadDocumentRequest request, CancellationToken cancellationToken)
     {
         var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
         return Ok(document);
@@ -41,7 +37,7 @@ public class DocumentIngestionController(
 
     [HttpGet]
     [Authorize(Policy = "StudentOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentIngestionResultDto>>> GetApprovedDocuments(
+    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetApprovedDocuments(
         [FromQuery] Subject? subject,
         [FromQuery] GradeLevel? gradeLevel,
         [FromQuery] int page = 1,
@@ -54,7 +50,7 @@ public class DocumentIngestionController(
 
     [HttpGet("admin")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentIngestionResultDto>>> GetDocumentsForAdmin(
+    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetDocumentsForAdmin(
         [FromQuery] bool? isApproved,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,

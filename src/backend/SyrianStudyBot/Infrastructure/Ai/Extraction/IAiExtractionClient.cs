@@ -6,9 +6,9 @@ namespace SyrianStudyBot.Infrastructure.Ai.Extraction;
 public interface IAiExtractionClient
 {
     Task<JobAcceptedResponse> SubmitExtractionJobAsync(
-        byte[] pdfBytes,
+        Stream pdfStream,
         string bookId,
-        int pageStart = 1,
+        int? pageStart = null ,
         int? pageEnd = null,
         CancellationToken cancellationToken = default);
 
@@ -18,6 +18,10 @@ public interface IAiExtractionClient
 
     Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
-        Func<Task>? beforeVisionExtraction = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
         CancellationToken cancellationToken = default);
 }

@@ -18,7 +18,7 @@ class OpenRouterService:
         self.logger = logger
         self.api_key = config.OPENROUTER_API_KEY
         self.model = config.OPENROUTER_MODEL
-        self.timeout = 180  # 3 minutes for free models (they can be slow)
+        self.timeout = config.OPENROUTER_TIMEOUT_SECONDS
         self.enabled = bool(self.api_key and self.api_key != "your-openrouter-api-key-here")
 
         if self.enabled:
@@ -111,7 +111,9 @@ class OpenRouterService:
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                       "image_url": {
+                        "url": f"data:image/png;base64,{b64}",
+                        },
                     },
                 ],
             })
@@ -119,16 +121,24 @@ class OpenRouterService:
             messages.append({"role": "user", "content": prompt})
 
         try:
+            self.logger.info(
+            f"OpenRouter request - model: {self.model}, "
+            f"image size: {len(image_bytes) if image_bytes else 0} bytes"
+            )
             response = httpx.post(
                 self.API_URL,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.1,
+               json={
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": 2048,
+                "provider": {
+                  "allow_fallbacks": True
+                        }
                 },
                 timeout=self.timeout,
             )

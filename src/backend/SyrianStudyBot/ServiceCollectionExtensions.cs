@@ -15,7 +15,6 @@ using SyrianStudyBot.Infrastructure.Ai.Rag;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
-using Polly;
 using SyrianStudyBot.Features.Auth.UseCases;
 using SyrianStudyBot.Features.Chat.UseCases;
 using SyrianStudyBot.Features.Documents.UseCases;
@@ -39,14 +38,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
-        services.AddScoped<IDocumentRequestService, DocumentRequestService>();
         return services;
     }
 
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
-        services.AddScoped<IDocumentFileExtractionService, DocumentFileExtractionService>();
         services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
@@ -201,9 +198,61 @@ public static class ServiceCollectionExtensions
         });
 
         // Use Python AI service as the only PDF extraction engine.
-        services.AddSingleton<IPdfTextExtractorService, AiServiceExtractionService>();
+        services.AddSingleton<IExtractionService, ExtractionService>();
 
         return services;
     }
 
+    public static async Task SeedRoles( IServiceProvider provider)
+    {
+         using var scope =  provider.CreateScope();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+
+        foreach(var role in new[] {"Admin" , "Student"})
+        {
+              if (!await roleManager.RoleExistsAsync(role))
+               await roleManager.CreateAsync(new IdentityRole<Guid>(role));
+        }
+    }
+
+    public static async Task SeedAdminUser (IServiceProvider provider)
+    {
+         using var scope = provider.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+
+
+        var adminEmail = config["Admin:Email"];
+        var adminPassword = config["Admin:Password"];
+
+        logger.LogInformation("Seeding admin user: {Email}", adminEmail);
+
+        if(!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
+        {
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if(adminUser is null)
+            {
+                adminUser = new ApplicationUser
+                {
+                    UserName = "AdminUser",
+                    Email = adminEmail,
+                    EmailConfirmed = true,
+                    TwoFactorEnabled = false,
+                    PhoneNumber = "+963983050315"  
+                };
+                var result = await userManager.CreateAsync(adminUser , adminPassword);
+                if (result.Succeeded)
+                {
+                 logger.LogInformation("Admin user created successfully.");
+                 await userManager.AddToRoleAsync(adminUser , "Admin");
+                }
+                else
+                {
+                    logger.LogError("Failed to create admin: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+                }
+            }            
+        }
+    }
 }

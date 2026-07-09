@@ -73,7 +73,7 @@ class ExtractionManager:
 
     def _get_provider_order(self, is_vision: bool):
         providers = []
-        for provider_name in getattr(self.config, "PROVIDER_PRIORITY", ["gemini", "groq", "openrouter"]):
+        for provider_name in getattr(self.config, "PROVIDER_PRIORITY", [ "groq", "gemini","openrouter"]):
             provider_name = provider_name.strip().lower()
             if provider_name == "gemini":
                 providers.append(("gemini_text" if not is_vision else "gemini_vision", self.gemini_service.extract_concepts_from_text if not is_vision else self.gemini_service.extract_concepts_from_image))
@@ -112,6 +112,38 @@ class ExtractionManager:
                     self.logger.info(f"Retrying provider {provider_name} for page {page_num} (attempt {attempt + 2}/{retry_count})")
 
         return None, last_error or "All providers failed"
+
+    def extract_single_image(self, image_bytes: bytes, page_number: int = 1) -> tuple:
+        """
+        Extract concepts from a single image (screenshot, PNG, JPG, etc.).
+        Tries providers in priority order with fallback.
+        Returns (ExtractionResponse | None, provider_name | error_message).
+        """
+        self.logger.info(f"Starting single image extraction ({len(image_bytes)} bytes)")
+
+        providers = self._get_provider_order(is_vision=True)
+        retry_count = max(1, int(getattr(self.config, "PROVIDER_RETRY_COUNT", 1)))
+
+        for provider_name, provider_call in providers:
+            for attempt in range(retry_count):
+                try:
+                    result = provider_call(page_number, image_bytes)
+
+                    if getattr(result, "success", False) and getattr(result, "concepts", None):
+                        self.logger.info(f"Image extraction succeeded with {provider_name}")
+                        return result, provider_name
+
+                    if getattr(result, "error_message", None):
+                        self.logger.warning(f"Provider {provider_name} failed for image: {result.error_message}")
+
+                except Exception as exc:
+                    self.logger.warning(f"Provider {provider_name} failed for image: {exc}")
+
+                if attempt < retry_count - 1:
+                    self.logger.info(f"Retrying provider {provider_name} for image (attempt {attempt + 2}/{retry_count})")
+
+        self.logger.error("All providers failed for image extraction")
+        return None, "All providers failed"
 
     def process_pdf_in_background(self, pdf_path: str, book_id: str, job_id: str):
         self.logger.info(f"Starting background job {job_id} for book_id: {book_id}, path: {pdf_path}")

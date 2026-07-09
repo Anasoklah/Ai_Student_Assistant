@@ -25,25 +25,24 @@ public class AiExtractionClient : IAiExtractionClient
     }
 
     public async Task<JobAcceptedResponse> SubmitExtractionJobAsync(
-        byte[] pdfBytes,
+        Stream pdfStream,
         string bookId,
-        int pageStart = 1,
-        int? pageEnd = null,
+        int? startPage = null,
+        int? endPage = null,
         CancellationToken cancellationToken = default)
     {
         using var formData = new MultipartFormDataContent();
         
-        var fileContent = new ByteArrayContent(pdfBytes);
+        var fileContent = new StreamContent(pdfStream);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         formData.Add(fileContent, "file", "document.pdf");
         
         formData.Add(new StringContent(bookId), "book_id");
-        formData.Add(new StringContent(pageStart.ToString()), "page_start");
-        
-        if (pageEnd.HasValue)
-        {
-            formData.Add(new StringContent(pageEnd.Value.ToString()), "page_end");
-        }
+        if(startPage.HasValue)
+           formData.Add(new StringContent(startPage.ToString()), "start_page");
+
+        if(endPage.HasValue)
+           formData.Add(new StringContent(endPage.ToString()), "end_page");
 
         var response = await _httpClient.PostAsync("/api/v1/extraction/extract-pdf-async", formData, cancellationToken);
         
@@ -110,9 +109,42 @@ public class AiExtractionClient : IAiExtractionClient
         }) ?? throw new InvalidOperationException("Failed to deserialize job result response");
     }
 
+    public async Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
+        CancellationToken cancellationToken = default)
+    {
+        using var formData = new MultipartFormDataContent();
+        
+        var fileContent = new StreamContent(imageStream);
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream"
+        };
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        formData.Add(fileContent, "file", fileName);
+
+        var response = await _httpClient.PostAsync("/api/v1/extraction/extract-image", formData, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Image extraction failed: {response.StatusCode} - {errorContent}");
+        }
+
+        var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<ImageExtractionResponse>(jsonResponse, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new InvalidOperationException("Failed to deserialize image extraction response");
+    }
+
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
-        Func<Task>? beforeVisionExtraction = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();

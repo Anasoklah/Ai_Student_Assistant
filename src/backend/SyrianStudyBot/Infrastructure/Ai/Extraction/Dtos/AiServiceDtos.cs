@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using SyrianStudyBot.Features.Documents.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
@@ -37,4 +38,12 @@ public record JobResultResponse(
     [property: JsonPropertyName("job_id")] string JobId,
     [property: JsonPropertyName("book_id")] string BookId,
     [property: JsonPropertyName("pages")] List<PageResult> Pages
+);
+
+public record ImageExtractionResponse(
+    [property: JsonPropertyName("success")] bool Success,
+    [property: JsonPropertyName("page_number")] int PageNumber,
+    [property: JsonPropertyName("concepts")] List<ExtractedConcept> Concepts,
+    [property: JsonPropertyName("error_message")] string? ErrorMessage,
+    [property: JsonPropertyName("extraction_service")] string? ExtractionService
 );

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 
 namespace SyrianStudyBot.Infrastructure.Identity;
@@ -7,29 +6,32 @@ namespace SyrianStudyBot.Infrastructure.Identity;
 public class UserContextService : IUserContextService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+     private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public UserContextService(UserManager<ApplicationUser> userManager)
+    public UserContextService(
+        IHttpContextAccessor httpContextAccessor,
+        UserManager<ApplicationUser> userManager)
     {
+        _httpContextAccessor = httpContextAccessor;
         _userManager = userManager;
     }
 
-    public Guid GetCurrentUserId(System.Security.Claims.ClaimsPrincipal user)
+    public Guid GetCurrentUserId()
     {
-        return user.GetUserId();
+        return _httpContextAccessor.HttpContext?.User.GetUserId() ?? Guid.Empty;
     }
 
-    public async Task<ApplicationUser?> GetCurrentUserAsync(System.Security.Claims.ClaimsPrincipal user)
+    public async Task<ApplicationUser?> GetCurrentUserAsync()
     {
-        var userId = GetCurrentUserId(user);
+        var userId = GetCurrentUserId();
         if (userId == Guid.Empty)
             return null;
 
         return await _userManager.FindByIdAsync(userId.ToString());
     }
 
-    public async Task<bool> IsUserAuthenticatedAsync(System.Security.Claims.ClaimsPrincipal user)
-    {
-        var currentUser = await GetCurrentUserAsync(user);
-        return currentUser != null;
+    public async Task<bool> IsUserAuthenticatedAsync()
+    {   
+        return GetCurrentUserId() == Guid.Empty ? false : true;
     }
 }
