@@ -20,4 +20,5 @@ public class Document
     public long FileSizeBytes { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public List<DocumentChunk> Chunks { get; set; } = [];
+    public List<BookChapter> Chapters { get; set; } = [];
 }
