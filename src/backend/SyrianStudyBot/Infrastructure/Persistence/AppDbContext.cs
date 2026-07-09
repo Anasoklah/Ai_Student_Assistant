@@ -19,6 +19,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<DailyUsageLog> DailyUsageLogs => Set<DailyUsageLog>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<BookChapter> BookChapters => Set<BookChapter>();
+    public DbSet<BookSection> BookSections => Set<BookSection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
