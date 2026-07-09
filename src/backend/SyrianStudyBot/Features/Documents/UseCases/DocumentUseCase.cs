@@ -11,6 +11,7 @@ using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Infrastructure.Common;
 using Microsoft.Extensions.Options;
 using SyrianStudyBot.Infrastructure.Identity;
+using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Features.Documents.UseCases;
 
@@ -23,6 +24,11 @@ public class DocumentUseCase : IDocumentUseCase
     private readonly IDocumentIngestionValidator _documentValidator;
     private readonly IExtractionService _ExtractionService;
     private readonly DocumentUploadOptions _uploadOptions;
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp"
+    };
 
     public DocumentUseCase(
         AppDbContext db,
@@ -48,16 +54,56 @@ public class DocumentUseCase : IDocumentUseCase
         if (validationError is not null)
             throw new BadRequestException(validationError);
 
-        var pages = await _ExtractionService.ExtractPagesAsync(
-            request.File.OpenReadStream(),
-            request.StartPage,
-            request.EndPage,
-            cancellationToken);
-        var ingestionRequest = DocumentMappers.ToIngestionCommand(request, pages , _userContext.GetCurrentUserId());
+        var ext = Path.GetExtension(request.File.FileName);
+
+        IReadOnlyList<ExtractedPageDto> pages;
+
+        if (ImageExtensions.Contains(ext))
+        {
+            // Route single images to the vision extraction endpoint
+            var imageResult = await _ExtractionService.ExtractImageAsync(
+                request.File.OpenReadStream(),
+                request.File.FileName,
+                cancellationToken);
+
+            if (!imageResult.Success)
+                throw new BadRequestException($"Image extraction failed: {imageResult.ErrorMessage}");
+
+            pages = ConvertImageResultToPages(imageResult);
+        }
+        else
+        {
+            // Route PDFs (and TXT/MD) to the standard extraction pipeline
+            pages = await _ExtractionService.ExtractPagesAsync(
+                request.File.OpenReadStream(),
+                request.StartPage,
+                request.EndPage,
+                cancellationToken);
+        }
+
+        var ingestionRequest = DocumentMappers.ToIngestionCommand(request, pages, _userContext.GetCurrentUserId());
         ValidateReadablePages(ingestionRequest);
 
         var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
         return DocumentMappers.MapToDto(document);
+    }
+
+    private static IReadOnlyList<ExtractedPageDto> ConvertImageResultToPages(ImageExtractionResponse result)
+    {
+        return new List<ExtractedPageDto>
+        {
+            new()
+            {
+                PageNumber = 1,
+                Text = string.Join("\n", result.Concepts.Select(c => $"{c.Title}\n{c.Content}")),
+                Concepts = result.Concepts.Select(c => new ExtractedConceptDto
+                {
+                    Title = c.Title,
+                    Content = c.Content,
+                    Keywords = c.Keywords
+                }).ToList()
+            }
+        };
     }
 
     // Student upload methods are intentionally removed for this phase.

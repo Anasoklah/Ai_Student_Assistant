@@ -71,3 +71,12 @@ class JobResultResponse(BaseModel):
     job_id: str
     book_id: str
     pages: List[PageResult]
+
+
+class ImageExtractionResponse(BaseModel):
+    """Returned synchronously from POST /extract-image."""
+    success: bool
+    page_number: int = 1
+    concepts: List[ExtractedConcept] = Field(default_factory=list)
+    error_message: Optional[str] = None
+    extraction_service: Optional[str] = None

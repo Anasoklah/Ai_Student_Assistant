@@ -7,7 +7,7 @@ load_dotenv()
 class Config:
     def __init__(self):
         self.GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-        self.GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        self.GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "120"))
         self.MAX_UPLOAD_SIZE_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_BYTES", str(100 * 1024 * 1024)))
         self.BOILERPLATE_REPEAT_RATIO = float(os.environ.get("BOILERPLATE_REPEAT_RATIO", "0.6"))
@@ -15,7 +15,7 @@ class Config:
 
         # OpenRouter fallback settings
         self.OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-        self.OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-nano-12b-v2-vl:free")
+        self.OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "")
         self.OPENROUTER_TIMEOUT_SECONDS = int(os.environ.get("OPENROUTER_TIMEOUT_SECONDS", "120"))
 
         # Groq fallback settings (free, no billing required)
@@ -27,5 +27,5 @@ class Config:
         self.PROVIDER_RETRY_COUNT = int(os.environ.get("PROVIDER_RETRY_COUNT", "1"))
         self.PROVIDER_PRIORITY = os.environ.get(
             "PROVIDER_PRIORITY",
-            "gemini,groq,openrouter",
+            "openrouter ,groq, gemini",
         ).split(",")

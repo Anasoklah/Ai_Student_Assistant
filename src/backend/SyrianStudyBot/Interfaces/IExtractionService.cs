@@ -1,4 +1,5 @@
 using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Interfaces;
 
@@ -8,5 +9,10 @@ public interface IExtractionService
         Stream pdfStream,
         int? startPage,
         int? endPage,
+        CancellationToken cancellationToken = default);
+
+    Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
         CancellationToken cancellationToken = default);
 }

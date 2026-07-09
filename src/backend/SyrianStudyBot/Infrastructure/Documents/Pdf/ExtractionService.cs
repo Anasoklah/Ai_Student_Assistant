@@ -1,6 +1,7 @@
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Infrastructure.Ai.Extraction;
+using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Documents.Pdf;
 
@@ -20,12 +21,10 @@ public class ExtractionService(
     {
         logger.LogInformation("Starting AI service extraction for PDF (stream)");
         
-        // Generate a book_id for this extraction session
         var bookId = Guid.NewGuid().ToString();
         
         try
         {
-            // Submit the extraction job to the AI service (streaming, no byte[] buffer)
             var jobAccepted = await aiExtractionClient.SubmitExtractionJobAsync(
                 pdfStream,
                 bookId,
@@ -35,7 +34,6 @@ public class ExtractionService(
             
             logger.LogInformation("Job {JobId} accepted for book {BookId}", jobAccepted.JobId, bookId);
             
-            // Poll for completion and get the results
             var extractedPages = await aiExtractionClient.ExtractPagesFromJobAsync(
                 jobAccepted.JobId,
                 cancellationToken);
@@ -51,5 +49,24 @@ public class ExtractionService(
         }
     }
 
-  
+    public async Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
+        CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Starting AI service image extraction: {FileName}", fileName);
+
+        try
+        {
+            var result = await aiExtractionClient.ExtractImageAsync(imageStream, fileName, cancellationToken);
+            logger.LogInformation("Image extraction completed: {FileName}, Success: {Success}, Concepts: {Count}",
+                fileName, result.Success, result.Concepts?.Count ?? 0);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "AI service image extraction failed: {FileName}", fileName);
+            throw;
+        }
+    }
 }

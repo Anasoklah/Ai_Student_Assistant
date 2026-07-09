@@ -1,11 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Features.Documents.UseCases;
-using SyrianStudyBot.Infrastructure.Documents.Validation;
-using SyrianStudyBot.Infrastructure.Identity;
-using SyrianStudyBot.Domain;
-using SyrianStudyBot.Domain.Entities;
+
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Features.Common.Dtos;

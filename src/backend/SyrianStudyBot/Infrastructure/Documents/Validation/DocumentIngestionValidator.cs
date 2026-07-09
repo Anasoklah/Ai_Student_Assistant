@@ -8,7 +8,11 @@ public class DocumentIngestionValidator : IDocumentIngestionValidator
     {
         ".pdf",
         ".txt",
-        ".md"
+        ".md",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
     };
 
     public string? ValidateIngestionRequest(DocumentIngestionCommand request)

@@ -19,4 +19,9 @@ public interface IAiExtractionClient
     Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
         CancellationToken cancellationToken = default);
+
+    Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
+        CancellationToken cancellationToken = default);
 }

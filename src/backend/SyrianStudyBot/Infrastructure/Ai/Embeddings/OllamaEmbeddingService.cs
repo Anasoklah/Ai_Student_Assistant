@@ -13,7 +13,7 @@ public class OllamaEmbeddingService : IEmbeddingService
     public OllamaEmbeddingService(IConfiguration configuration, ILogger<OllamaEmbeddingService> logger)
     {
         _logger = logger;
-        var baseUrl = configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
+        var baseUrl = configuration["OLLAMA_HOST"] ?? "http://localhost:11434";
         _model = configuration["Ollama:EmbeddingModel"] ?? "nomic-embed-text";
 
         var httpClient = new HttpClient

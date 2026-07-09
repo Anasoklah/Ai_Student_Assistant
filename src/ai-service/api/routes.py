@@ -4,7 +4,7 @@ import tempfile
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends, BackgroundTasks, HTTPException
 
-from models.dto import JobAcceptedResponse, JobStatusResponse, JobResultResponse, JobStatus
+from models.dto import JobAcceptedResponse, JobStatusResponse, JobResultResponse, JobStatus, ImageExtractionResponse
 from services.extraction_manager import ExtractionManager
 
 router = APIRouter(prefix="/api/v1/extraction", tags=["Extraction"])
@@ -88,6 +88,65 @@ async def extract_pdf_async(
         if sliced_file_path and os.path.exists(sliced_file_path):
             os.remove(sliced_file_path)
         raise HTTPException(status_code=500, detail="Could not initialize background processing pipeline.")
+
+
+@router.post("/extract-image", response_model=ImageExtractionResponse)
+async def extract_image(
+    file: UploadFile = File(...),
+    manager: ExtractionManager = Depends(get_extraction_manager),
+):
+    """
+    Accepts a single image (PNG, JPG, JPEG, WebP), processes it through the vision
+    model, and returns extracted concepts synchronously. No job polling required.
+    """
+    ALLOWED_IMAGE_TYPES = {
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+    }
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        ext = os.path.splitext(file.filename.lower())[1] if file.filename else ""
+        if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported image type: {file.content_type or ext}. "
+                       f"Allowed: PNG, JPG, JPEG, WebP.",
+            )
+
+    max_size = manager.config.MAX_UPLOAD_SIZE_BYTES
+    image_bytes = b""
+
+    try:
+        while chunk := await file.read(1024 * 512):
+            image_bytes += chunk
+            if len(image_bytes) > max_size:
+                raise HTTPException(status_code=413, detail="Image exceeds maximum allowed size.")
+
+        manager.logger.info(f"Image received: {file.filename}, {len(image_bytes)} bytes, type: {file.content_type}")
+
+        result, provider_or_error = manager.extract_single_image(image_bytes)
+
+        if result is None or not result.success:
+            manager.logger.error(f"Image extraction failed: {provider_or_error}")
+            return ImageExtractionResponse(
+                success=False,
+                error_message=provider_or_error,
+                extraction_service=None,
+            )
+
+        return ImageExtractionResponse(
+            success=True,
+            concepts=result.concepts,
+            extraction_service=provider_or_error,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        manager.logger.error(f"Image extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Image processing failed: {str(e)}")
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)

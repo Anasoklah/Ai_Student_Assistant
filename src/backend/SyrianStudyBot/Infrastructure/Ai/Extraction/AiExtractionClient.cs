@@ -109,6 +109,40 @@ public class AiExtractionClient : IAiExtractionClient
         }) ?? throw new InvalidOperationException("Failed to deserialize job result response");
     }
 
+    public async Task<ImageExtractionResponse> ExtractImageAsync(
+        Stream imageStream,
+        string fileName,
+        CancellationToken cancellationToken = default)
+    {
+        using var formData = new MultipartFormDataContent();
+        
+        var fileContent = new StreamContent(imageStream);
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            _ => "application/octet-stream"
+        };
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        formData.Add(fileContent, "file", fileName);
+
+        var response = await _httpClient.PostAsync("/api/v1/extraction/extract-image", formData, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Image extraction failed: {response.StatusCode} - {errorContent}");
+        }
+
+        var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<ImageExtractionResponse>(jsonResponse, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new InvalidOperationException("Failed to deserialize image extraction response");
+    }
+
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
         CancellationToken cancellationToken = default)

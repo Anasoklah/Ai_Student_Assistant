@@ -67,7 +67,7 @@ services:
       Email__FromEmail: ${Email__FromEmail:-}
       Email__FromName: ${Email__FromName:-Syrian Study Bot}
       Email__Password: ${Email__Password:-}
-      Ollama__BaseUrl: http://host.docker.internal:11434
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       Ollama__EmbeddingModel: ${Ollama__EmbeddingModel:-nomic-embed-text}
     extra_hosts:
       - "host.docker.internal:host-gateway"
