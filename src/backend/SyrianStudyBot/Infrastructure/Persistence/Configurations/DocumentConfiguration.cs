@@ -15,8 +15,7 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.HasIndex(e => e.GradeLevel);
         builder.HasIndex(e => e.DocumentType);
         builder.HasIndex(e => e.UploadedByUserId);
-        builder.HasIndex(e => e.IsApproved);
-        builder.HasIndex(e => new { e.Subject, e.GradeLevel, e.DocumentType, e.IsApproved });
+        builder.HasIndex(e => new { e.Subject, e.GradeLevel, e.DocumentType });
 
         builder.Property(e => e.Title).HasMaxLength(500);
         builder.Property(e => e.Subject)

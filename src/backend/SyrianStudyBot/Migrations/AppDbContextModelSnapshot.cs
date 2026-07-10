@@ -312,7 +312,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("DocumentId", "ChapterNumber")
                         .IsUnique();
 
-                    b.ToTable("BookChapters");
+                    b.ToTable("BookChapters", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.BookSection", b =>
@@ -350,7 +350,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("ChapterId", "SectionNumber")
                         .IsUnique();
 
-                    b.ToTable("BookSections");
+                    b.ToTable("BookSections", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.ChatMessage", b =>
@@ -398,7 +398,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("Timestamp");
 
-                    b.ToTable("ChatMessages");
+                    b.ToTable("ChatMessages", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.ChatSession", b =>
@@ -446,7 +446,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId", "LastActiveAt");
 
-                    b.ToTable("ChatSessions");
+                    b.ToTable("ChatSessions", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.DailyUsageLog", b =>
@@ -481,7 +481,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("UserId", "Date")
                         .IsUnique();
 
-                    b.ToTable("DailyUsageLogs");
+                    b.ToTable("DailyUsageLogs", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.Document", b =>
@@ -550,7 +550,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("Subject", "GradeLevel", "DocumentType", "IsApproved");
 
-                    b.ToTable("Documents");
+                    b.ToTable("Documents", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.DocumentChunk", b =>
@@ -603,7 +603,7 @@ namespace SyrianStudyBot.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
-                    b.ToTable("DocumentChunks");
+                    b.ToTable("DocumentChunks", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.Payment", b =>
@@ -667,7 +667,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId", "Status", "CreatedAt");
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.QuizResult", b =>
@@ -707,7 +707,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("QuizResults");
+                    b.ToTable("QuizResults", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.QuizSession", b =>
@@ -760,7 +760,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("QuizSessions");
+                    b.ToTable("QuizSessions", (string)null);
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.RefreshToken", b =>
@@ -809,7 +809,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId", "ExpiresAt", "IsRevoked", "IsReplaced");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

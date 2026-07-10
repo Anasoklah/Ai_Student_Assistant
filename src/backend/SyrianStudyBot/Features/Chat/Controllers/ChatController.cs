@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Features.Chat.UseCases;
 using SyrianStudyBot.Infrastructure.Identity;
-using SyrianStudyBot.Features.Chat.Mappers;
 using SyrianStudyBot.Features.Chat.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Chat.Controllers;
 

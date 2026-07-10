@@ -4,7 +4,6 @@ using SyrianStudyBot.Features.Payments.UseCases;
 using SyrianStudyBot.Infrastructure.Identity;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Payments.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Payments.Controllers;
 

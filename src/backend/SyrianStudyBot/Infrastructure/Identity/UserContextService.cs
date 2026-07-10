@@ -34,4 +34,11 @@ public class UserContextService : IUserContextService
     {   
         return GetCurrentUserId() == Guid.Empty ? false : true;
     }
+
+    public async Task<bool> IsInRole(string role)
+    {
+        var Role = role.Trim();
+        var user = await GetCurrentUserAsync();
+        return await _userManager.IsInRoleAsync( user! , Role);
+    }
 }

@@ -20,7 +20,11 @@ public class RagController : ControllerBase
         if (request is null || string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("The question is required.");
 
-        var answer = await _ragPipeline.QueryAsync(request.Question, request.Mode, request.Subject, request.SectionFilter, request.ChapterFilter,cancellationToken);
+        var answer = await _ragPipeline.QueryAsync(
+            request.Question, request.Mode, request.Subject,
+            request.DocumentId, request.ChapterId, request.SectionId,
+            request.PageStart, request.PageEnd,
+            cancellationToken);
 
         return Ok(new RagQueryResponseDto { Answer = answer });
     }

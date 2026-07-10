@@ -5,5 +5,14 @@ namespace SyrianStudyBot.Interfaces;
 
 public interface IRagPipelineService
 {
-    Task<string> QueryAsync(string question, ChatMode mode, Subject? subject, string? sectionFilter = null, string? chapterFilter = null, CancellationToken cancellationToken = default);
+    Task<string> QueryAsync(
+        string question,
+        ChatMode mode,
+        Subject? subject,
+        Guid? documentId = null,
+        Guid? chapterId = null,
+        Guid? sectionId = null,
+        int? pageStart = null,
+        int? pageEnd = null,
+        CancellationToken cancellationToken = default);
 }

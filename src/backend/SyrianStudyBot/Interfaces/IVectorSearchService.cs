@@ -9,7 +9,10 @@ public interface IVectorSearchService
         float[] queryVector,
         Subject? subject,
         int topK,
-        string? chapterFilter = null,
-        string? sectionFilter = null,
+        Guid? documentId = null,
+        Guid? chapterId = null,
+        Guid? sectionId = null,
+        int? pageStart = null,
+        int? pageEnd = null,
         CancellationToken cancellationToken = default);
 }

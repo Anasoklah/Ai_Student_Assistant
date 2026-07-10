@@ -6,7 +6,6 @@ using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Infrastructure.Common;
 using Microsoft.Extensions.Options;
@@ -20,7 +19,6 @@ public class DocumentUseCase : IDocumentUseCase
     private readonly AppDbContext _db;
     private readonly IUserContextService _userContext;
     private readonly IDocumentIngestionService _ingestion;
-    private readonly IPagingService _pagingService;
     private readonly IDocumentIngestionValidator _documentValidator;
     private readonly IExtractionService _ExtractionService;
     private readonly DocumentUploadOptions _uploadOptions;
@@ -33,7 +31,6 @@ public class DocumentUseCase : IDocumentUseCase
     public DocumentUseCase(
         AppDbContext db,
         IDocumentIngestionService ingestion,
-        IPagingService pagingService,
         IDocumentIngestionValidator documentValidator,
         IExtractionService ExtractionService,
         IUserContextService userContext,
@@ -42,13 +39,12 @@ public class DocumentUseCase : IDocumentUseCase
         _db = db;
         _userContext = userContext;
         _ingestion = ingestion;
-        _pagingService = pagingService;
         _documentValidator = documentValidator;
         _ExtractionService = ExtractionService;
         _uploadOptions = uploadOptions.Value;
     }
 
-    public async Task<DocumentSummaryDto> IngestUploadedDocumentAsync(UploadDocumentRequest request, CancellationToken cancellationToken = default)
+    public async Task<DocumentDto> IngestUploadedDocumentAsync(UploadDocumentRequest request, CancellationToken cancellationToken = default)
     {
         var validationError = _documentValidator.ValidateFileUploadRequest(request, _uploadOptions.MaxAdminFileSizeBytes);
         if (validationError is not null)
@@ -85,9 +81,38 @@ public class DocumentUseCase : IDocumentUseCase
         ValidateReadablePages(ingestionRequest);
 
         var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);
-        return DocumentMappers.MapToDto(document);
+        return DocumentMappers.MapToStudentDto(document);
     }
 
+
+ 
+   // Student endpoint: GET /api/documents
+public async Task<PagedResponse<DocumentDto>> GetMyDocumentsAsync(
+    int page, int pageSize, CancellationToken cancellationToken = default)
+{
+    var userId = _userContext.GetCurrentUserId();
+
+    
+    return await _db.Documents
+        .Where(d => d.UploadedByUserId == userId)
+        .OrderByDescending(d => d.UploadedAt)
+        .Select(d => DocumentMappers.MapToStudentDto(d))
+        .ToPagedResponseAsync(page, pageSize, cancellationToken);
+}
+
+// Admin endpoint: GET /api/admin/documents
+public async Task<PagedResponse<AdminDocumentDto>> GetAllDocumentsAsync(
+    int page, int pageSize, CancellationToken cancellationToken = default)
+{
+    
+    return await _db.Documents
+        .OrderByDescending(d => d.UploadedAt)
+        .Select(d => DocumentMappers.MapToAdminDto(d))
+        .ToPagedResponseAsync(page, pageSize, cancellationToken);
+}
+
+
+    #region Helpers 
     private static IReadOnlyList<ExtractedPageDto> ConvertImageResultToPages(ImageExtractionResponse result)
     {
         return new List<ExtractedPageDto>
@@ -105,77 +130,14 @@ public class DocumentUseCase : IDocumentUseCase
             }
         };
     }
-
-    // Student upload methods are intentionally removed for this phase.
-    // We focus on admin upload ingestion only and will restore student upload support later.
-
-    public async Task<DocumentSummaryDto> SetApprovalAsync(Guid documentId, bool approve, CancellationToken cancellationToken = default)
-    {
-        var document = await _db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
-        if (document is null)
-            return null!;
-
-        document.IsApproved = approve;
-        await _db.SaveChangesAsync(cancellationToken);
-        return DocumentMappers.MapToDto(document);
-    }
-
-    public async Task<PagedResponse<DocumentSummaryDto>> GetApprovedDocumentsAsync(Subject? subject, GradeLevel? gradeLevel, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
-
-        var query = _db.Documents.Where(d => d.IsApproved);
-        if (subject.HasValue)
-            query = query.Where(d => d.Subject == subject.Value);
-        if (gradeLevel.HasValue)
-            query = query.Where(d => d.GradeLevel == gradeLevel.Value);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(d => d.UploadedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(d => DocumentMappers.MapToDto(d))
-            .ToListAsync(cancellationToken);
-
-        return new PagedResponse<DocumentSummaryDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
-    }
-
-    public async Task<PagedResponse<DocumentSummaryDto>> GetDocumentsForAdminAsync(bool? isApproved, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
-
-        var query = _db.Documents.AsQueryable();
-        if (isApproved.HasValue)
-            query = query.Where(d => d.IsApproved == isApproved.Value);
-
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(d => d.UploadedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(d => DocumentMappers.MapToDto(d))
-            .ToListAsync(cancellationToken);
-
-        return new PagedResponse<DocumentSummaryDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
-    }
-
+        
     private void ValidateReadablePages(DocumentIngestionCommand request)
     {
         var validationError = _documentValidator.ValidateIngestionRequest(request);
         if (validationError is not null)
             throw new BadRequestException(validationError);
     }
+
+    #endregion
+
 }

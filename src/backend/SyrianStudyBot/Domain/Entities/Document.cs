@@ -16,7 +16,6 @@ public class Document
     // For student uploads
     public Guid? UploadedByUserId { get; set; }
     public ApplicationUser? UploadedByUser { get; set; }
-    public bool IsApproved { get; set; } = true;  // Admin approval for student uploads
     public long FileSizeBytes { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public List<DocumentChunk> Chunks { get; set; } = [];

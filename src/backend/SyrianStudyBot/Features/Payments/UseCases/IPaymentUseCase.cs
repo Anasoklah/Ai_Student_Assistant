@@ -1,7 +1,5 @@
-using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Payments.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Payments.UseCases;
 

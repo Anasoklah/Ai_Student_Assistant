@@ -9,9 +9,11 @@ public class GenerateQuizRequestDto
     public GradeLevel? GradeLevel { get; init; }
     public int TotalQuestions { get; init; } = 5;
 
-    public string? SectionFilter {get; init;} = null;
-    public string? ChapterFilter {get; init;} = null;
-
+    public Guid? DocumentId { get; init; }
+    public Guid? ChapterId { get; init; }
+    public Guid? SectionId { get; init; }
+    public int? PageStart { get; init; }
+    public int? PageEnd { get; init; }
 }
 
 public class QuizSessionResponseDto
