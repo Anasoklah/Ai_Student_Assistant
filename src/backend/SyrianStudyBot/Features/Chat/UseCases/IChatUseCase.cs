@@ -1,5 +1,4 @@
 using SyrianStudyBot.Features.Chat.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Chat.UseCases;
 

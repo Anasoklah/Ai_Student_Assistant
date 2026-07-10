@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Features.Quiz.UseCases;
 using SyrianStudyBot.Infrastructure.Identity;
 using SyrianStudyBot.Features.Quiz.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Quiz.Controllers;
 

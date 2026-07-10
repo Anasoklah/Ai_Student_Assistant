@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SyrianStudyBot.Features.Documents.UseCases;
-
-using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Documents.Controllers;
 
@@ -24,39 +21,25 @@ public class DocumentIngestionController(
         return Ok(document);
     }
 
-    // Student upload endpoints are removed for this phase. Admin upload is the only supported ingestion flow.
-
-
-    [HttpPost("{documentId:guid}/approval")]
-    [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> SetApproval(Guid documentId, [FromQuery] bool approve, CancellationToken cancellationToken)
-    {
-        var document = await documentUseCase.SetApprovalAsync(documentId, approve, cancellationToken);
-        return document is null ? NotFound(new { message = "Document not found" }) : Ok(document);
-    }
-
     [HttpGet]
     [Authorize(Policy = "StudentOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetApprovedDocuments(
-        [FromQuery] Subject? subject,
-        [FromQuery] GradeLevel? gradeLevel,
+    public async Task<ActionResult<PagedResponse<DocumentDto>>> GetApprovedDocuments(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var response = await documentUseCase.GetApprovedDocumentsAsync(subject, gradeLevel, page, pageSize, cancellationToken);
+        var response = await documentUseCase.GetMyDocumentsAsync( page, pageSize, cancellationToken);
         return Ok(response);
     }
 
     [HttpGet("admin")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<ActionResult<PagedResponse<DocumentSummaryDto>>> GetDocumentsForAdmin(
-        [FromQuery] bool? isApproved,
+    public async Task<ActionResult<PagedResponse<AdminDocumentDto>>> GetDocumentsForAdmin(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var response = await documentUseCase.GetDocumentsForAdminAsync(isApproved, page, pageSize, cancellationToken);
+        var response = await documentUseCase.GetAllDocumentsAsync(page, pageSize, cancellationToken);
         return Ok(response);
     }
 }

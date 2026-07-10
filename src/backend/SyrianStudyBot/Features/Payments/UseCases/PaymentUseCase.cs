@@ -1,13 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Features.Payments.Mappers;
-using SyrianStudyBot.Infrastructure.Common;
 using SyrianStudyBot.Infrastructure.Persistence;
-using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Payments.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Payments.UseCases;
 
@@ -15,13 +12,12 @@ public class PaymentUseCase : IPaymentUseCase
 {
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IPagingService _pagingService;
 
-    public PaymentUseCase(AppDbContext db, UserManager<ApplicationUser> userManager, IPagingService pagingService)
+    public PaymentUseCase(AppDbContext db, UserManager<ApplicationUser> userManager)
     {
         _db = db;
         _userManager = userManager;
-        _pagingService = pagingService;
+        
     }
 
     public async Task<PaymentResponseDto> CreatePaymentAsync(Guid userId, CreatePaymentRequestDto request, CancellationToken cancellationToken = default)
@@ -60,31 +56,19 @@ public class PaymentUseCase : IPaymentUseCase
 
     public async Task<PagedResponse<PaymentResponseDto>> GetMyPaymentsAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
-
+        
         var query = _db.Payments
             .Where(p => p.UserId == userId)
             .OrderByDescending(p => p.CreatedAt);
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+        return await query
             .Select(p => PaymentMappers.MapPayment(p))
-            .ToListAsync(cancellationToken);
-
-        return new PagedResponse<PaymentResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
+            .ToPagedResponseAsync(page , pageSize , cancellationToken);
     }
 
     public async Task<PagedResponse<PaymentResponseDto>> GetPaymentsForAdminAsync(PaymentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
+        
 
         var query = _db.Payments.AsQueryable();
         if (status.HasValue)
@@ -92,20 +76,10 @@ public class PaymentUseCase : IPaymentUseCase
 
         query = query.OrderByDescending(p => p.CreatedAt);
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+        return await query
             .Select(p => PaymentMappers.MapPayment(p))
-            .ToListAsync(cancellationToken);
+            .ToPagedResponseAsync(page , pageSize ,cancellationToken);
 
-        return new PagedResponse<PaymentResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
     }
 
     public async Task<PaymentResponseDto> ReviewPaymentAsync(Guid paymentId, ReviewPaymentRequestDto request, CancellationToken cancellationToken = default)

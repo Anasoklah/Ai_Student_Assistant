@@ -8,4 +8,6 @@ public interface IUserContextService
     Guid GetCurrentUserId();
     Task<ApplicationUser?> GetCurrentUserAsync();
     Task<bool> IsUserAuthenticatedAsync();
+
+    Task<bool> IsInRole(string role);
 }

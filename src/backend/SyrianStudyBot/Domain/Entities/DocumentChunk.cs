@@ -19,4 +19,11 @@ public class DocumentChunk
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Document Document { get; set; } = null!;
+
+    // FK to book structure for exact GUID-based filtering
+    public Guid? ChapterId { get; set; }
+    public BookChapter? Chapter { get; set; }
+
+    public Guid? SectionId { get; set; }
+    public BookSection? Section { get; set; }
 }

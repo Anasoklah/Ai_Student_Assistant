@@ -1,6 +1,4 @@
-using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Quiz.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 
 namespace SyrianStudyBot.Features.Quiz.UseCases;
 

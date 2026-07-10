@@ -8,7 +8,6 @@ using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Chat.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 using SyrianStudyBot.Interfaces;
 
 namespace SyrianStudyBot.Features.Chat.UseCases;
@@ -18,20 +17,18 @@ public class ChatUseCase : IChatUseCase
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IRagPipelineService _ragPipeline;
-    private readonly IPagingService _pagingService;
+   
     private readonly IUsageTrackingService _usageTrackingService;
 
     public ChatUseCase(
         AppDbContext db,
         UserManager<ApplicationUser> userManager,
         IRagPipelineService ragPipeline,
-        IPagingService pagingService,
         IUsageTrackingService usageTrackingService)
     {
         _db = db;
         _userManager = userManager;
         _ragPipeline = ragPipeline;
-        _pagingService = pagingService;
         _usageTrackingService = usageTrackingService;
     }
 
@@ -41,42 +38,31 @@ public class ChatUseCase : IChatUseCase
         {
             UserId = userId,
             Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim(),
-            Subject = request.Subject,
         };
 
         _db.ChatSessions.Add(session);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return ChatMappers.MapSession(session);
+        return ChatMappers.ToSessionResponeDto(session , true);
     }
 
     public async Task<PagedResponse<ChatSessionResponseDto>> GetSessionsAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
 
         var query = _db.ChatSessions
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.LastActiveAt);
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(s => ChatMappers.MapSession(s))
-            .ToListAsync(cancellationToken);
+        
+        return await query
+            .Select(s => ChatMappers.ToSessionResponeDto(s , true))
+            .ToPagedResponseAsync(page , pageSize ,cancellationToken);
 
-        return new PagedResponse<ChatSessionResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
+   
     }
 
     public async Task<PagedResponse<ChatMessageResponseDto>> GetMessagesAsync(Guid userId, Guid sessionId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
 
         var ownsSession = await _db.ChatSessions.AnyAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
         if (!ownsSession)
@@ -86,20 +72,11 @@ public class ChatUseCase : IChatUseCase
             .Where(m => m.SessionId == sessionId)
             .OrderBy(m => m.Timestamp);
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(m => ChatMappers.MapMessage(m))
-            .ToListAsync(cancellationToken);
+        return await query
+            .Select(m => ChatMappers.ToMessageResponse(m , true))
+            .ToPagedResponseAsync(page , pageSize , cancellationToken);
 
-        return new PagedResponse<ChatMessageResponseDto>
-        {
-            Items = items,
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
+     
     }
 
     public async Task<AskQuestionResponseDto> AskAsync(Guid userId, Guid sessionId, AskQuestionRequestDto request, CancellationToken cancellationToken = default)
@@ -132,9 +109,13 @@ public class ChatUseCase : IChatUseCase
         var answer = await _ragPipeline.QueryAsync(
             question,
             request.ChatMode,
-            session.Subject,
-            session.ChapterFilter,
-            session.SectionFilter, cancellationToken);
+            request.Subject,
+            request.DocumentId,
+            request.ChapterId,
+            request.SectionId,
+            request.PageStart,
+            request.PageEnd,
+            cancellationToken);
         var assistantMessage = new ChatMessage
         {
             SessionId = session.Id,
@@ -156,8 +137,8 @@ public class ChatUseCase : IChatUseCase
         return new AskQuestionResponseDto
         {
             Answer = answer,
-            UserMessage = ChatMappers.MapMessage(userMessage),
-            AssistantMessage = ChatMappers.MapMessage(assistantMessage)
+            UserMessage = ChatMappers.ToMessageResponse(userMessage , true),
+            AssistantMessage = ChatMappers.ToMessageResponse(assistantMessage , true)
         };
     }
 }

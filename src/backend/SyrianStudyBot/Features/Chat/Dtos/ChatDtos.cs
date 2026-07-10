@@ -2,29 +2,23 @@ using SyrianStudyBot.Domain.Enums;
 
 namespace SyrianStudyBot.Features.Chat.Dtos;
 
-public class CreateChatSessionRequestDto
+public record CreateChatSessionRequestDto
 {
     public string Title { get; set; } = string.Empty;
-    public Subject? Subject { get; set; }
-    public string? ChapterFilter { get; set; }
-    public string? SectionFilter { get; set; }
+  
 }
-public class ChatSessionResponseDto
+public record ChatSessionResponseDto
 {
+    public bool sucess {get;init;}
     public Guid Id { get; init; }
     public string? Title { get; init; }
-    public Subject? Subject { get; init; }
-    public ChatMode Mode { get; init; }
-    public bool IsActive { get; init; }
-
-    public string? SectionFilter { get; set; } = null;
-    public string? ChapterFilter { get; set; } = null;
     public DateTime CreatedAt { get; init; }
     public DateTime LastActiveAt { get; init; }
 }
 
-public class ChatMessageResponseDto
+public record ChatMessageResponseDto
 {
+    public bool sucess {get;init;}
     public Guid Id { get; init; }
     public ChatMessageRole Role { get; init; }
     public string Content { get; init; } = string.Empty;
@@ -32,10 +26,16 @@ public class ChatMessageResponseDto
     public DateTime Timestamp { get; init; }
 }
 
-public class AskQuestionRequestDto
+public record AskQuestionRequestDto
 {
     public string Question { get; init; } = string.Empty;
-    public ChatMode ChatMode {get; init;} = ChatMode.Explain; 
+    public ChatMode ChatMode {get; init;} = ChatMode.Explain;
+    public Subject? Subject {get;init;}
+    public Guid? DocumentId {get; init;}
+    public Guid? ChapterId {get; init;}
+    public Guid? SectionId {get; init;}
+    public int? PageStart {get;init;}
+    public int? PageEnd {get;init;} 
 }
 
 public class AskQuestionResponseDto

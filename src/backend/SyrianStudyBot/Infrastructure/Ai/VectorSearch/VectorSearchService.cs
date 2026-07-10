@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
 using SyrianStudyBot.Infrastructure.Persistence;
-using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Interfaces;
@@ -15,39 +14,40 @@ public class VectorSearchService(AppDbContext db, ILogger<VectorSearchService> l
         float[] queryVector,
         Subject? subject,
         int topK,
-        string? chapterFilter = null,
-        string? sectionFilter = null,
+        Guid? documentId = null,
+        Guid? chapterId = null,
+        Guid? sectionId = null,
+        int? pageStart = null,
+        int? pageEnd = null,
         CancellationToken cancellationToken = default)
     {
         logger.LogDebug(
-            "Searching top {TopK} chunks | subject={Subject} chapter={Chapter} section={Section}",
-            topK, subject, chapterFilter ?? "any", sectionFilter ?? "any");
+            "Searching top {TopK} chunks | subject={Subject} doc={Doc} chapter={Chapter} section={Section} pages={PageStart}-{PageEnd}",
+            topK, subject, documentId, chapterId, sectionId, pageStart, pageEnd);
 
         var vector = new Vector(queryVector);
 
         var query = db.DocumentChunks
             .Include(c => c.Document)
-            .Where(c => c.Document.IsApproved)
             .AsQueryable();
 
         if (subject.HasValue)
             query = query.Where(c => c.Document.Subject == subject.Value);
 
-        if (!string.IsNullOrWhiteSpace(chapterFilter))
-        {
-            var chapter = chapterFilter.Trim();
-            query = query.Where(c =>
-                c.ChapterTitle != null &&
-                EF.Functions.ILike(c.ChapterTitle, $"%{chapter}%"));
-        }
+        if (documentId.HasValue && documentId.Value != Guid.Empty)
+            query = query.Where(c => c.DocumentId == documentId.Value);
 
-        if (!string.IsNullOrWhiteSpace(sectionFilter))
-        {
-            var section = sectionFilter.Trim();
-            query = query.Where(c =>
-                c.SectionTitle != null &&
-                EF.Functions.ILike(c.SectionTitle, $"%{section}%"));
-        }
+        if (chapterId.HasValue && chapterId.Value != Guid.Empty)
+            query = query.Where(c => c.ChapterId == chapterId.Value);
+
+        if (sectionId.HasValue && sectionId.Value != Guid.Empty)
+            query = query.Where(c => c.SectionId == sectionId.Value);
+
+        if (pageStart.HasValue)
+            query = query.Where(c => c.PageNumber >= pageStart.Value);
+
+        if (pageEnd.HasValue)
+            query = query.Where(c => c.PageNumber <= pageEnd.Value);
 
         return await query
             .OrderBy(c => c.Embedding.CosineDistance(vector))

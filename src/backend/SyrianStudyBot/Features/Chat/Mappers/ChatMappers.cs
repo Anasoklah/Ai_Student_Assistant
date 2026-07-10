@@ -6,20 +6,18 @@ namespace SyrianStudyBot.Features.Chat.Mappers;
 
 public static class ChatMappers
 {
-    public static ChatSessionResponseDto MapSession(ChatSession session) => new()
+    public static ChatSessionResponseDto ToSessionResponeDto(ChatSession session , bool isSuccess) => new()
     {
+        sucess = isSuccess,
         Id = session.Id,
         Title = session.Title,
-        Subject = session.Subject,
-        SectionFilter = session.SectionFilter,
-        ChapterFilter = session.ChapterFilter,
-        IsActive = session.IsActive,
         CreatedAt = session.CreatedAt,
         LastActiveAt = session.LastActiveAt
     };
 
-    public static ChatMessageResponseDto MapMessage(ChatMessage message) => new()
+    public static ChatMessageResponseDto ToMessageResponse(ChatMessage message , bool isSuccess) => new()
     {
+        sucess = isSuccess,
         Id = message.Id,
         Role = message.Role,
         Content = message.Content,

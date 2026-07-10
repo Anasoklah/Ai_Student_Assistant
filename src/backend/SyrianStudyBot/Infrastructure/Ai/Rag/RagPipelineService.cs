@@ -13,13 +13,27 @@ public class RagPipelineService(
 {
     private const int TopK = 5;
 
-    public async Task<string> QueryAsync(string question, ChatMode mode, Subject? subject, string? sectionFilter = null, string? chapterFilter = null, CancellationToken cancellationToken = default)
+    public async Task<string> QueryAsync(
+        string question,
+        ChatMode mode,
+        Subject? subject,
+        Guid? documentId = null,
+        Guid? chapterId = null,
+        Guid? sectionId = null,
+        int? pageStart = null,
+        int? pageEnd = null,
+        CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("RAG query | mode={Mode} subject={Subject} question={Question}", mode, subject, question);
+        logger.LogInformation("RAG query | mode={Mode} subject={Subject} doc={Doc} chapter={Chapter} section={Section} pages={PageStart}-{PageEnd}",
+            mode, subject, documentId, chapterId, sectionId, pageStart, pageEnd);
 
         var questionVector = await embeddingService.GenerateEmbeddingAsync(question, cancellationToken);
 
-        var chunks = await vectorSearch.SearchAsync(questionVector, subject, TopK, sectionFilter, chapterFilter, cancellationToken);
+        var chunks = await vectorSearch.SearchAsync(
+            questionVector, subject, TopK,
+            documentId, chapterId, sectionId,
+            pageStart, pageEnd,
+            cancellationToken);
 
         if (chunks.Count == 0)
         {

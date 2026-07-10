@@ -34,7 +34,6 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
-        services.AddScoped<IPagingService, PagingService>();
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
         services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();

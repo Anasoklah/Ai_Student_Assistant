@@ -8,7 +8,6 @@ using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Quiz.Dtos;
-using SyrianStudyBot.Features.Common.Dtos;
 using SyrianStudyBot.Interfaces;
 
 namespace SyrianStudyBot.Features.Quiz.UseCases;
@@ -17,20 +16,23 @@ public class QuizUseCase : IQuizUseCase
 {
     private readonly AppDbContext _db;
     private readonly IRagPipelineService _ragPipeline;
-    private readonly IPagingService _pagingService;
 
-    public QuizUseCase(AppDbContext db, IRagPipelineService ragPipeline, IPagingService pagingService)
+    public QuizUseCase(AppDbContext db, IRagPipelineService ragPipeline)
     {
         _db = db;
         _ragPipeline = ragPipeline;
-        _pagingService = pagingService;
+      
     }
 
     public async Task<QuizSessionResponseDto> GenerateQuizAsync(Guid userId, GenerateQuizRequestDto request, CancellationToken cancellationToken = default)
     {
         var totalQuestions = Math.Clamp(request.TotalQuestions, 1, 20);
         var prompt = $"Generate {totalQuestions} exam questions for {request.Subject}.";
-        var quizText = await _ragPipeline.QueryAsync(prompt, ChatMode.Quiz, request.Subject, request.ChapterFilter , request.SectionFilter, cancellationToken);
+        var quizText = await _ragPipeline.QueryAsync(
+            prompt, ChatMode.Quiz, request.Subject,
+            request.DocumentId, request.ChapterId, request.SectionId,
+            request.PageStart, request.PageEnd,
+            cancellationToken);
 
         var questions = JsonDocument.Parse(JsonSerializer.Serialize(new
         {
@@ -55,25 +57,18 @@ public class QuizUseCase : IQuizUseCase
 
     public async Task<PagedResponse<QuizSessionResponseDto>> GetHistoryAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        (page, pageSize) = _pagingService.NormalizePaging(page, pageSize);
+        
 
         var query = _db.QuizSessions
             .Where(q => q.UserId == userId)
             .OrderByDescending(q => q.CreatedAt);
 
-        var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+        
+        return await query
+            .Select(q => QuizMappers.MapSession(q))
+            .ToPagedResponseAsync(page , pageSize , cancellationToken);
 
-        return new PagedResponse<QuizSessionResponseDto>
-        {
-            Items = items.Select(QuizMappers.MapSession).ToList(),
-            Page = page,
-            PageSize = pageSize,
-            TotalCount = total
-        };
+    
     }
 
     public async Task<QuizSessionResponseDto?> GetQuizAsync(Guid userId, Guid quizSessionId, CancellationToken cancellationToken = default)
