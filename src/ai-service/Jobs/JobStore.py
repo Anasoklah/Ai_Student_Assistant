@@ -53,3 +53,5 @@ class JobStore:
             job = self._jobs[job_id]
             job.status = JobStatus.FAILED
             job.status_message = error_message
+
+  

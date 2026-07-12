@@ -33,13 +33,8 @@ openrouter_service = OpenRouterService(config, logger)
 job_store = JobStore()
 
 extraction_manager = ExtractionManager(
-    pdf_service,
-    gemini_service,
-    groq_service,
-    openrouter_service,
-    job_store,
-    logger,
-    config,
+    pdf_service, gemini_service, groq_service, openrouter_service, 
+    job_store, logger, config
 )
 
 app = FastAPI(

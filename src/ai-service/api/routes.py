@@ -4,7 +4,7 @@ import tempfile
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends, BackgroundTasks, HTTPException
 
-from models.dto import JobAcceptedResponse, JobStatusResponse, JobResultResponse, JobStatus, ImageExtractionResponse
+from models.dto import JobAcceptedResponse, JobStatusResponse, JobResultResponse, JobStatus, ImageExtractionResponse , StructureExtractionResponse
 from services.extraction_manager import ExtractionManager
 
 router = APIRouter(prefix="/api/v1/extraction", tags=["Extraction"])
@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/v1/extraction", tags=["Extraction"])
 def get_extraction_manager() -> ExtractionManager:
     from app import extraction_manager
     return extraction_manager
+
+
 
 
 @router.post("/extract-pdf-async", response_model=JobAcceptedResponse)
@@ -50,15 +52,19 @@ async def extract_pdf_async(
                     raise HTTPException(status_code=413, detail="File exceeds maximum allowed size.")
                 tmp.write(chunk)
             temp_file_path = tmp.name
-
         pdf_total = manager.pdf_service.count_pages(temp_file_path)
         start = max(1, page_start)
         end = min(page_end or pdf_total, pdf_total)
         if start > end:
             raise HTTPException(status_code=400, detail=f"page_start ({start}) is greater than page_end ({end}).")
 
+        sliced_file_path = manager.pdf_service.slice_pdf(
+            temp_file_path,
+            start,
+            end,
+)
+
         pages_total = end - start + 1
-        sliced_file_path = manager.pdf_service.slice_pdf(temp_file_path, start, end)
 
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -67,11 +73,12 @@ async def extract_pdf_async(
         manager.job_store.create(job_id=job_id, book_id=book_id, pages_total=pages_total)
 
         background_tasks.add_task(
-            manager.process_pdf_in_background,
-            pdf_path=sliced_file_path,
-            book_id=book_id,
-            job_id=job_id,
-        )
+        manager.process_pdf_in_background,
+        pdf_path=sliced_file_path,
+        book_id=book_id,
+        job_id=job_id,
+        page_start=start,
+        )   
 
         return JobAcceptedResponse(job_id=job_id, book_id=book_id)
 
@@ -179,4 +186,79 @@ async def get_job_result(job_id: str, manager: ExtractionManager = Depends(get_e
             detail=f"Job is not ready yet. Current status: {job.status.value}",
         )
 
-    return JobResultResponse(job_id=job.job_id, book_id=job.book_id, pages=job.pages)
+    return JobResultResponse(
+        job_id=job.job_id,
+        book_id=job.book_id,
+        pages=job.pages,
+    )
+
+
+@router.post(
+    "/extract-book-structure",
+    response_model=StructureExtractionResponse,
+)
+async def extract_book_structure(
+    file: UploadFile = File(...),
+    toc_page: int = Form(..., ge=1),
+    manager: ExtractionManager = Depends(get_extraction_manager),
+):
+    """
+    Extract the document structure (Table of Contents) from a book.
+    This endpoint should be called only once when a new book is imported.
+    """
+
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only PDFs are allowed."
+        )
+
+    temp_file_path = None
+
+    try:
+        max_size = manager.config.MAX_UPLOAD_SIZE_BYTES
+        size = 0
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+
+                if size > max_size:
+                    tmp.close()
+                    os.remove(tmp.name)
+                    raise HTTPException(
+                        status_code=413,
+                        detail="File exceeds maximum allowed size."
+                    )
+
+                tmp.write(chunk)
+
+            temp_file_path = tmp.name
+
+        total_pages = manager.pdf_service.count_pages(temp_file_path)
+
+        if toc_page > total_pages:
+            raise HTTPException(
+                status_code=400,
+                detail=f"toc_page ({toc_page}) is out of range. PDF contains {total_pages} pages."
+            )
+
+        structure = manager.extract_book_structure(
+            pdf_path=temp_file_path,
+            toc_page=toc_page,
+        )
+
+        if structure is None:
+            return StructureExtractionResponse(
+                success=False,
+                error_message="Failed to extract document structure."
+            )
+
+        return StructureExtractionResponse(
+            success=True,
+            structure=structure,
+        )
+
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)

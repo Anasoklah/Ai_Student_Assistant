@@ -59,11 +59,19 @@ def test_groq_service_initializes_enabled_flag_when_unconfigured():
 
 def test_process_pdf_in_background_falls_back_to_groq_when_gemini_fails():
     class DummyPdfService:
+        def count_pages(self, pdf_path):
+            return 1
+
         def extract_pages(self, pdf_path):
             yield 1, "هذا نص واضح ومفهوم ومناسب لاستخراج المفاهيم التعليمية من الصفحة الأولى"
+
+        def render_page_as_image(self, pdf_path, page_number):
             return b"image"
 
     class DummyGeminiService:
+        def call_with_prompt_and_image(self, prompt, image_bytes):
+            return None
+
         def extract_concepts_from_text(self, page_number, text):
             return ExtractionResponse(success=False, page_number=page_number, concepts=[], error_message="RESOURCE_EXHAUSTED")
 
@@ -71,6 +79,9 @@ def test_process_pdf_in_background_falls_back_to_groq_when_gemini_fails():
             return ExtractionResponse(success=False, page_number=page_number, concepts=[], error_message="RESOURCE_EXHAUSTED")
 
     class DummyGroqService:
+        def call_with_prompt_and_image(self, prompt, image_bytes):
+            return None
+
         def extract_concepts_from_text(self, page_number, text):
             return ExtractionResponse(success=True, page_number=page_number, concepts=[{"title": "Concept", "content": "ok", "keywords": []}])
 
@@ -78,6 +89,9 @@ def test_process_pdf_in_background_falls_back_to_groq_when_gemini_fails():
             return ExtractionResponse(success=True, page_number=page_number, concepts=[{"title": "Concept", "content": "ok", "keywords": []}])
 
     class DummyOpenRouterService:
+        def call_with_prompt_and_image(self, prompt, image_bytes):
+            return None
+
         def extract_concepts_from_text(self, page_number, text):
             return ExtractionResponse(success=True, page_number=page_number, concepts=[])
 

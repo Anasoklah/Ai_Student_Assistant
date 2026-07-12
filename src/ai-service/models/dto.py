@@ -31,19 +31,6 @@ class PageResult(BaseModel):
     text_quality_score: Optional[float] = None
 
 
-class JobRecord(BaseModel):
-    """
-    The full internal state of one extraction job.
-    Lives only in JobStore (in-memory). Never returned directly to callers —
-    the API surfaces trimmed views of this (JobStatusResponse / JobResultResponse).
-    """
-    job_id: str
-    book_id: str
-    status: JobStatus = JobStatus.PROCESSING
-    status_message: str = "Processing started."
-    pages_done: int = 0
-    pages_total: int = 0
-    pages: List[PageResult] = Field(default_factory=list)
 
 
 # ---- API response shapes ----
@@ -80,3 +67,53 @@ class ImageExtractionResponse(BaseModel):
     concepts: List[ExtractedConcept] = Field(default_factory=list)
     error_message: Optional[str] = None
     extraction_service: Optional[str] = None
+
+
+    # Add this new class alongside your existing DTOs
+
+class TocEntry(BaseModel):
+    """
+    Represents one entry from the Table of Contents.
+    
+    Example:
+        TocEntry(
+            title="الاعداد العادية",
+            page_number=20,
+            level="Section",
+            parent_chapter="الوحدة الأولى: الأعداد والعمليات"
+        )
+    """
+    title: str                              # The title of the chapter/section
+    page_number: Optional[int] = None       # Starting page number (null for some chapter headers)
+    level: str = "Section"                  # "Chapter" or "Section"
+    parent_chapter: Optional[str] = None    # Which chapter this section belongs to
+
+
+class DocumentStructure(BaseModel):
+    """
+    The complete structure of a document extracted from its Table of Contents.
+    This is what gets sent to .NET after parsing.
+    """
+    chapters: List[TocEntry] = Field(default_factory=list)
+    sections: List[TocEntry] = Field(default_factory=list)
+    total_entries: int = 0
+    extraction_method: str = "unknown"  # "toc_parser", "ai_fallback", "manual"
+
+
+class JobRecord(BaseModel):
+    job_id: str
+    book_id: str
+    status: JobStatus = JobStatus.PROCESSING
+    status_message: str = "Processing started."
+    pages_done: int = 0
+    pages_total: int = 0
+    pages: List[PageResult] = Field(default_factory=list)
+
+class StructureExtractionResponse(BaseModel):
+    """
+    Returned from POST /extract-book-structure.
+    Used once when importing a new book.
+    """
+    success: bool
+    structure: Optional[DocumentStructure] = None
+    error_message: Optional[str] = None

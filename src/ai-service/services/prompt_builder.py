@@ -1,8 +1,4 @@
 class PromptBuilder:
-    # Bump this whenever the instructions below change meaningfully. Thread it
-    # through into ExtractionResponse / your DB row so you can always tell
-    # which prompt version produced which stored concepts.
-    PROMPT_VERSION = "v2-2026-07"
 
     @staticmethod
     def build_extraction_prompt(text: str) -> str:
