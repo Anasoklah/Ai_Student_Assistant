@@ -100,13 +100,6 @@ class DocumentStructure(BaseModel):
     extraction_method: str = "unknown"  # "toc_parser", "ai_fallback", "manual"
 
 
-# Update JobResultResponse to include structure
-class JobResultResponse(BaseModel):
-    job_id: str
-    book_id: str
-    pages: List[PageResult]
-
-
 class JobRecord(BaseModel):
     job_id: str
     book_id: str

@@ -10,8 +10,6 @@ class Config:
         self.GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.GEMINI_TIMEOUT_SECONDS = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "120"))
         self.MAX_UPLOAD_SIZE_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_BYTES", str(200 * 1024 * 1024)))
-        self.BOILERPLATE_REPEAT_RATIO = float(os.environ.get("BOILERPLATE_REPEAT_RATIO", "0.6"))
-        self.NET_BACKEND_URL = os.environ.get("NET_BACKEND_URL", "http://localhost:5000")
 
         # OpenRouter fallback settings
         self.OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")

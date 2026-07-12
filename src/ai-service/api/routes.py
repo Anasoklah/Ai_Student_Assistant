@@ -77,6 +77,7 @@ async def extract_pdf_async(
         pdf_path=sliced_file_path,
         book_id=book_id,
         job_id=job_id,
+        page_start=start,
         )   
 
         return JobAcceptedResponse(job_id=job_id, book_id=book_id)

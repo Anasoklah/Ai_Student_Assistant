@@ -1,5 +1,4 @@
 import os
-from enum import Enum
 
 from services.pdf_slice_service import PdfSliceService
 from services.gemini_service import GeminiService
@@ -9,27 +8,6 @@ from Jobs.JobStore import JobStore
 from models.dto import PageResult , DocumentStructure
 from services.structure_extractor import StructureExtractor
 from services.toc_parser import TocParser
-
-
-class HeadingLevel(str, Enum):
-    CHAPTER = "Chapter"
-    UNIT = "Unit"
-    LESSON = "Lesson"
-    UNKNOWN = "Unknown"
-
-
-def ClassifyArabicHeadingLevel(text: str, text_level: int | None) -> HeadingLevel:
-    if not text or not text.strip():
-        return HeadingLevel.UNKNOWN
-
-    text_lower = text.lower()
-    if "الفصل" in text_lower:
-        return HeadingLevel.CHAPTER
-    if "الوحدة" in text_lower:
-        return HeadingLevel.UNIT
-    if "الدرس" in text_lower:
-        return HeadingLevel.LESSON
-    return HeadingLevel.UNKNOWN
 
 
 class ExtractionManager:
@@ -158,6 +136,7 @@ class ExtractionManager:
     pdf_path: str,
     book_id: str,
     job_id: str,
+    page_start: int = 1,
     ):
         self.logger.info(f"Starting background job {job_id} for book_id: {book_id}, path: {pdf_path}")
 
@@ -165,16 +144,15 @@ class ExtractionManager:
             total_pages = self.pdf_service.count_pages(pdf_path)
             self.logger.info(f"PDF has {total_pages} total pages")
             
-            
-            
             self.logger.info("Step 2: Processing pages for concept extraction...")
             
             for page_num, text in self.pdf_service.extract_pages(pdf_path):
+              original_page_num = page_num + page_start - 1
               self._process_single_page(
                 pdf_path=pdf_path,
                 book_id=book_id,
                 job_id=job_id,
-                page_num=page_num,
+                page_num=original_page_num,
                 text=text,
                 )
 
