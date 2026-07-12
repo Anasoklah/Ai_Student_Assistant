@@ -1,7 +1,7 @@
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Features.Documents.Dtos;
 
-namespace SyrianStudyBot.Interfaces;
+namespace SyrianStudyBot.Features.contracts.services;
 
 public interface IDocumentIngestionService
 {

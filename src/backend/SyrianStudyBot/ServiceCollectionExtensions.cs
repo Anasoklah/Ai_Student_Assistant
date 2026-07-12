@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Polly;
 using Polly.Extensions.Http;
-using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Features.Auth.Services;
 using SyrianStudyBot.Features.Auth.Services.BackgroundJobs;
 using SyrianStudyBot.Features.Auth.Services.Options;
@@ -22,16 +21,23 @@ using SyrianStudyBot.Features.Payments.UseCases;
 using SyrianStudyBot.Features.Profile.UseCases;
 using SyrianStudyBot.Features.Quiz.UseCases;
 using SyrianStudyBot.Infrastructure.Persistence;
+using SyrianStudyBot.Infrastructure.Persistence.Repositories;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Infrastructure.Ai.Chat;
 using SyrianStudyBot.Infrastructure.Ai.Embeddings;
 using SyrianStudyBot.Infrastructure.Documents.Pdf;
 using SyrianStudyBot.Infrastructure.Ai.Extraction;
+using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot;
 
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers infrastructure-level services that don't belong to a specific feature.
+    /// User context, usage tracking, and document validation are cross-cutting concerns.
+    /// </summary>
     public static IServiceCollection AddCommonServices(this IServiceCollection services)
     {
         services.AddScoped<IUserContextService, UserContextService>();
@@ -40,16 +46,34 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers all repositories and core application services.
+    /// Repositories encapsulate all AppDbContext access — UseCases and Services
+    /// should never inject AppDbContext directly.
+    /// </summary>
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
+        // ── Repositories (all scoped, sharing the same AppDbContext per request) ──
+        services.AddScoped<IDocumentRepository, DocumentRepository>();
+        services.AddScoped<IChatRepository, ChatRepository>();
+        services.AddScoped<IQuizRepository, QuizRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IUsageRepository, UsageRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+        // ── External AI/API services (no database access) ──
         services.AddSingleton<IEmbeddingService, OllamaEmbeddingService>();
-        services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
-        services.AddScoped<IVectorSearchService, VectorSearchService>();
         services.AddScoped<IRagPipelineService, RagPipelineService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+
+        // ── Application services (business logic, uses repositories) ──
+        services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
+        services.AddScoped<IVectorSearchService, VectorSearchService>();
+
+        // ── UseCases (orchestration layer) ──
         services.AddScoped<IAuthUseCase, AuthUseCase>();
         services.AddScoped<IChatUseCase, ChatUseCase>();
         services.AddScoped<IDocumentUseCase, DocumentUseCase>();

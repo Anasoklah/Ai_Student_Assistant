@@ -1,27 +1,30 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Features.Quiz.Mappers;
 using SyrianStudyBot.Infrastructure.Common;
-using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Quiz.Dtos;
-using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Features.Quiz.UseCases;
 
+/// <summary>
+/// Orchestrates quiz operations: generating quizzes from RAG,
+/// tracking history, and submitting results.
+/// Relies on IQuizRepository for all database operations.
+/// </summary>
 public class QuizUseCase : IQuizUseCase
 {
-    private readonly AppDbContext _db;
+    private readonly IQuizRepository _quizRepo;
     private readonly IRagPipelineService _ragPipeline;
 
-    public QuizUseCase(AppDbContext db, IRagPipelineService ragPipeline)
+    public QuizUseCase(IQuizRepository quizRepo, IRagPipelineService ragPipeline)
     {
-        _db = db;
+        _quizRepo = quizRepo;
         _ragPipeline = ragPipeline;
-      
     }
 
     public async Task<QuizSessionResponseDto> GenerateQuizAsync(Guid userId, GenerateQuizRequestDto request, CancellationToken cancellationToken = default)
@@ -49,32 +52,26 @@ public class QuizUseCase : IQuizUseCase
             Questions = questions
         };
 
-        _db.QuizSessions.Add(session);
-        await _db.SaveChangesAsync(cancellationToken);
+        _quizRepo.AddQuiz(session);
+        await _quizRepo.SaveChangesAsync(cancellationToken);
 
         return QuizMappers.MapSession(session);
     }
 
     public async Task<PagedResponse<QuizSessionResponseDto>> GetHistoryAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        
+        var entityPage = await _quizRepo.GetUserQuizzesAsync(userId, page, pageSize, cancellationToken);
 
-        var query = _db.QuizSessions
-            .Where(q => q.UserId == userId)
-            .OrderByDescending(q => q.CreatedAt);
-
-        
-        return await query
-            .Select(q => QuizMappers.MapSession(q))
-            .ToPagedResponseAsync(page , pageSize , cancellationToken);
-
-    
+        return new PagedResponse<QuizSessionResponseDto>(
+            entityPage.Items.Select(q => QuizMappers.MapSession(q)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
     }
 
     public async Task<QuizSessionResponseDto?> GetQuizAsync(Guid userId, Guid quizSessionId, CancellationToken cancellationToken = default)
     {
-        var session = await _db.QuizSessions
-            .FirstOrDefaultAsync(q => q.Id == quizSessionId && q.UserId == userId, cancellationToken);
+        var session = await _quizRepo.GetQuizByIdAsync(quizSessionId, userId, cancellationToken);
 
         return session is null ? null : QuizMappers.MapSession(session);
     }
@@ -84,9 +81,7 @@ public class QuizUseCase : IQuizUseCase
         if (request.MaxScore <= 0 || request.Score < 0 || request.Score > request.MaxScore)
             throw new BadRequestException("Invalid score");
 
-        var session = await _db.QuizSessions
-            .Include(q => q.Result)
-            .FirstOrDefaultAsync(q => q.Id == quizSessionId && q.UserId == userId, cancellationToken);
+        var session = await _quizRepo.GetQuizWithResultAsync(quizSessionId, userId, cancellationToken);
 
         if (session is null)
             return null;
@@ -110,8 +105,8 @@ public class QuizUseCase : IQuizUseCase
             CompletedAt = session.CompletedAt.Value
         };
 
-        _db.QuizResults.Add(result);
-        await _db.SaveChangesAsync(cancellationToken);
+        _quizRepo.AddResult(result);
+        await _quizRepo.SaveChangesAsync(cancellationToken);
 
         return QuizMappers.MapResult(result);
     }

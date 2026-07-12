@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 
 namespace SyrianStudyBot.Infrastructure.Persistence;

@@ -1,7 +1,7 @@
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
-using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Rag;
 

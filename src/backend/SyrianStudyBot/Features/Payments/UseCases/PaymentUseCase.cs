@@ -1,23 +1,26 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Features.Payments.Mappers;
-using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Payments.Dtos;
+using SyrianStudyBot.Features.contracts.repositories;
 
 namespace SyrianStudyBot.Features.Payments.UseCases;
 
+/// <summary>
+/// Orchestrates payment operations: creating payments, submitting proof,
+/// reviewing payments, and upgrading user subscriptions.
+/// Relies on IPaymentRepository for all database operations.
+/// </summary>
 public class PaymentUseCase : IPaymentUseCase
 {
-    private readonly AppDbContext _db;
+    private readonly IPaymentRepository _paymentRepo;
     private readonly UserManager<ApplicationUser> _userManager;
 
-    public PaymentUseCase(AppDbContext db, UserManager<ApplicationUser> userManager)
+    public PaymentUseCase(IPaymentRepository paymentRepo, UserManager<ApplicationUser> userManager)
     {
-        _db = db;
+        _paymentRepo = paymentRepo;
         _userManager = userManager;
-        
     }
 
     public async Task<PaymentResponseDto> CreatePaymentAsync(Guid userId, CreatePaymentRequestDto request, CancellationToken cancellationToken = default)
@@ -32,16 +35,15 @@ public class PaymentUseCase : IPaymentUseCase
             Status = PaymentStatus.Pending
         };
 
-        _db.Payments.Add(payment);
-        await _db.SaveChangesAsync(cancellationToken);
+        _paymentRepo.Add(payment);
+        await _paymentRepo.SaveChangesAsync(cancellationToken);
 
         return PaymentMappers.MapPayment(payment);
     }
 
     public async Task<PaymentResponseDto> SubmitProofAsync(Guid userId, Guid paymentId, SubmitPaymentProofRequestDto request, CancellationToken cancellationToken = default)
     {
-        var payment = await _db.Payments
-            .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId, cancellationToken);
+        var payment = await _paymentRepo.GetByIdAsync(paymentId, userId, cancellationToken);
 
         if (payment is null)
             return null!;
@@ -50,43 +52,37 @@ public class PaymentUseCase : IPaymentUseCase
         payment.ProviderResponse = request.ProviderResponse;
         payment.Status = PaymentStatus.UnderReview;
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await _paymentRepo.SaveChangesAsync(cancellationToken);
         return PaymentMappers.MapPayment(payment);
     }
 
     public async Task<PagedResponse<PaymentResponseDto>> GetMyPaymentsAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        
-        var query = _db.Payments
-            .Where(p => p.UserId == userId)
-            .OrderByDescending(p => p.CreatedAt);
+        var entityPage = await _paymentRepo.GetUserPaymentsAsync(userId, page, pageSize, cancellationToken);
 
-        return await query
-            .Select(p => PaymentMappers.MapPayment(p))
-            .ToPagedResponseAsync(page , pageSize , cancellationToken);
+        return new PagedResponse<PaymentResponseDto>(
+            entityPage.Items.Select(p => PaymentMappers.MapPayment(p)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
     }
 
     public async Task<PagedResponse<PaymentResponseDto>> GetPaymentsForAdminAsync(PaymentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        
+        var entityPage = status.HasValue
+            ? await _paymentRepo.GetPaymentsByStatusAsync(status.Value, page, pageSize, cancellationToken)
+            : await _paymentRepo.GetUserPaymentsAsync(Guid.Empty, page, pageSize, cancellationToken);
 
-        var query = _db.Payments.AsQueryable();
-        if (status.HasValue)
-            query = query.Where(p => p.Status == status.Value);
-
-        query = query.OrderByDescending(p => p.CreatedAt);
-
-        return await query
-            .Select(p => PaymentMappers.MapPayment(p))
-            .ToPagedResponseAsync(page , pageSize ,cancellationToken);
-
+        return new PagedResponse<PaymentResponseDto>(
+            entityPage.Items.Select(p => PaymentMappers.MapPayment(p)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
     }
 
     public async Task<PaymentResponseDto> ReviewPaymentAsync(Guid paymentId, ReviewPaymentRequestDto request, CancellationToken cancellationToken = default)
     {
-        var payment = await _db.Payments
-            .Include(p => p.User)
-            .FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);
+        var payment = await _paymentRepo.GetByIdWithUserAsync(paymentId, cancellationToken);
 
         if (payment is null)
             return null!;
@@ -97,7 +93,7 @@ public class PaymentUseCase : IPaymentUseCase
         if (!request.Approve)
         {
             payment.Status = PaymentStatus.Failed;
-            await _db.SaveChangesAsync(cancellationToken);
+            await _paymentRepo.SaveChangesAsync(cancellationToken);
             return PaymentMappers.MapPayment(payment);
         }
 
@@ -111,7 +107,7 @@ public class PaymentUseCase : IPaymentUseCase
             await _userManager.UpdateAsync(payment.User);
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await _paymentRepo.SaveChangesAsync(cancellationToken);
         return PaymentMappers.MapPayment(payment);
     }
 }

@@ -1,4 +1,4 @@
-namespace SyrianStudyBot.Interfaces;
+namespace SyrianStudyBot.Features.contracts.services;
 
 public interface IChatService
 {
