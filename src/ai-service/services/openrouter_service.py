@@ -76,6 +76,74 @@ class OpenRouterService:
 
         return ExtractionResponse(**data)
 
+    def call_with_prompt_and_image(self, prompt: str, image_bytes: bytes) -> str | None:
+        """
+        Send a custom prompt + image to OpenRouter and return raw response text.
+        Used by StructureExtractor for vision-based TOC extraction.
+        Returns None on failure.
+        """
+        if not self.enabled or not image_bytes:
+            return None
+
+        import base64
+
+        system_msg = (
+            "You are a JSON extraction assistant. You MUST respond with valid JSON only. "
+            "No markdown, no explanations, no text before or after."
+        )
+
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        messages = [
+            {"role": "system", "content": system_msg},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{b64}",
+                        },
+                    },
+                ],
+            },
+        ]
+
+        try:
+            response = httpx.post(
+                self.API_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.1,
+                    "max_tokens": 2048,
+                    "provider": {
+                        "allow_fallbacks": True
+                    },
+                },
+                timeout=self.timeout,
+            )
+
+            if response.status_code != 200:
+                self.logger.warning(f"OpenRouter vision call failed with status {response.status_code}: {response.text[:200]}")
+                return None
+
+            result = response.json()
+            if "choices" not in result or not result["choices"]:
+                self.logger.warning("OpenRouter vision call returned no choices")
+                return None
+
+            content = result["choices"][0]["message"]["content"]
+            return content if content and content.strip() else None
+
+        except Exception as e:
+            self.logger.warning(f"OpenRouter vision call failed: {e}")
+            return None
+
     def extract_concepts_from_text(self, page_number: int, text: str) -> ExtractionResponse:
         if not self.enabled:
             return ExtractionResponse(success=False, page_number=page_number, concepts=[],

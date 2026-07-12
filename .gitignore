@@ -2,7 +2,13 @@
 # Dependencies
 node_modules/
 packages/
+# Ignore Windows/Linux/macOS compiled python files
+*.pyc
+*.pyo
+*.pyd
 
+# Ignore the cache directory
+__pycache__/
 # Build outputs
 bin/
 obj/
@@ -25,6 +31,7 @@ logs/
 .idea/
 *.swp
 *.swo
+*.pyc
 
 # OS files
 .DS_Store
@@ -46,6 +53,8 @@ Thumbs.db
 coverage/
 htmlcov/
 
+#md
+*.md 
 # Package manager caches
 .npm/
 .yarn/

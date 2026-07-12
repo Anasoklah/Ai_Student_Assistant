@@ -6,7 +6,9 @@ from services.gemini_service import GeminiService
 from services.groq_service import GroqService
 from services.openrouter_service import OpenRouterService
 from Jobs.JobStore import JobStore
-from models.dto import PageResult
+from models.dto import PageResult , DocumentStructure
+from services.structure_extractor import StructureExtractor
+from services.toc_parser import TocParser
 
 
 class HeadingLevel(str, Enum):
@@ -41,6 +43,12 @@ class ExtractionManager:
         self.job_store = job_store
         self.logger = logger
         self.config = config
+
+        self.toc_parser = TocParser(logger)
+        self.structure_extractor = StructureExtractor(
+            pdf_service, gemini_service, groq_service, openrouter_service,
+            self.toc_parser, logger, config
+        )
 
     def _assess_text_quality(self, text: str) -> float:
         if not text or len(text) < 20:
@@ -145,40 +153,29 @@ class ExtractionManager:
         self.logger.error("All providers failed for image extraction")
         return None, "All providers failed"
 
-    def process_pdf_in_background(self, pdf_path: str, book_id: str, job_id: str):
+    def process_pdf_in_background(
+    self,
+    pdf_path: str,
+    book_id: str,
+    job_id: str,
+    ):
         self.logger.info(f"Starting background job {job_id} for book_id: {book_id}, path: {pdf_path}")
 
         try:
+            total_pages = self.pdf_service.count_pages(pdf_path)
+            self.logger.info(f"PDF has {total_pages} total pages")
+            
+            
+            
+            self.logger.info("Step 2: Processing pages for concept extraction...")
+            
             for page_num, text in self.pdf_service.extract_pages(pdf_path):
-                self.logger.info(f"Processing page {page_num} for book {book_id} (job {job_id})...")
-
-                quality_score = self._assess_text_quality(text)
-                self.logger.info(f"Page {page_num} text quality: {quality_score:.2f}")
-
-                if quality_score >= 0.7:
-                    gemini_res, extraction_service = self._try_provider(page_num, text, pdf_path, is_vision=False)
-                    if gemini_res is None:
-                        gemini_res = self.gemini_service.extract_concepts_from_text(page_num, text)
-                        extraction_service = "gemini_text"
-                else:
-                    self.logger.warning(
-                        f"Page {page_num} text quality too low ({quality_score:.2f}), falling back to vision extraction"
-                    )
-                    gemini_res, extraction_service = self._try_provider(page_num, text, pdf_path, is_vision=True)
-                    if gemini_res is None:
-                        gemini_res = self.gemini_service.extract_concepts_from_image(page_num, self.pdf_service.render_page_as_image(pdf_path, page_num))
-                        extraction_service = "gemini_vision"
-
-                self.job_store.add_page_result(
-                    job_id,
-                    PageResult(
-                        page_number=page_num,
-                        success=bool(getattr(gemini_res, "success", False)),
-                        concepts=getattr(gemini_res, "concepts", []),
-                        error_message=getattr(gemini_res, "error_message", None),
-                        extraction_service=extraction_service,
-                        text_quality_score=quality_score,
-                    ),
+              self._process_single_page(
+                pdf_path=pdf_path,
+                book_id=book_id,
+                job_id=job_id,
+                page_num=page_num,
+                text=text,
                 )
 
             self.job_store.mark_ready(job_id)
@@ -192,3 +189,79 @@ class ExtractionManager:
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
                 self.logger.info(f"Cleaned up temp file for job {job_id}: {pdf_path}")
+
+    def _process_single_page(
+    self,
+    pdf_path,
+    book_id,
+    job_id,
+    page_num,
+    text,
+    ):
+        """
+        Process a single page: extract concepts and tag with chapter/section context.
+        
+        Strategy:
+        1. Assess text quality via OCR
+        2. If text quality >= 0.7: try text-based extraction using providers in priority order
+        3. If text quality < 0.7 or text providers all failed: try vision-based extraction 
+           using providers in priority order
+        """
+
+        self.logger.info(f"Processing page {page_num} for book {book_id} (job {job_id})...")
+
+        quality_score = self._assess_text_quality(text)
+        self.logger.info(f"Page {page_num} text quality: {quality_score:.2f}")
+
+        result = None
+        extraction_service = None
+
+        if quality_score >= 0.7:
+            # Text quality is good — try text-based extraction with provider priority
+            self.logger.info(f"Page {page_num}: text quality good, trying text-based extraction")
+            result, extraction_service = self._try_provider(page_num, text, pdf_path, is_vision=False)
+        
+        if result is None:
+            # Text extraction failed or text quality was low — fall back to vision
+            self.logger.info(f"Page {page_num}: trying vision-based extraction")
+            result, extraction_service = self._try_provider(page_num, text, pdf_path, is_vision=True)
+
+        
+        self.job_store.add_page_result(
+            job_id,
+           PageResult(
+            page_number=page_num,
+            success=bool(getattr(result, "success", False)) if result else False,
+            concepts=getattr(result, "concepts", []) if result else [],
+            error_message=getattr(result, "error_message", "All providers failed") if not result else None,
+            extraction_service=extraction_service,
+            text_quality_score=quality_score,
+            )
+        )
+
+    def extract_book_structure(
+    self,
+    pdf_path: str,
+    toc_page: int,
+    ) -> DocumentStructure | None:
+        """
+        Extract the document structure from the Table of Contents.
+        This is intended to be called once when a new book is imported.
+        """
+
+        total_pages = self.pdf_service.count_pages(pdf_path)
+
+        self.logger.info(
+            f"Extracting document structure from TOC page {toc_page}"
+        )
+
+        structure = self.structure_extractor.extract_structure(
+            pdf_path=pdf_path,
+            total_pages=total_pages,
+            toc_page=toc_page,
+        )
+        
+        if structure is None:
+         self.logger.warning("Structure extraction failed.")
+
+        return structure

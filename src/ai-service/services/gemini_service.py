@@ -13,6 +13,30 @@ class GeminiService:
         self.timeout_ms = getattr(config, "GEMINI_TIMEOUT_SECONDS", 120) * 1000
         self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
+    def call_with_prompt_and_image(self, prompt: str, image_bytes: bytes) -> str | None:
+        """
+        Send a custom prompt + image to Gemini and return raw response text.
+        Used by StructureExtractor for vision-based TOC extraction.
+        Returns None on failure.
+        """
+        if not image_bytes:
+            return None
+
+        try:
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, image_part],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    http_options=types.HttpOptions(timeout=self.timeout_ms),
+                ),
+            )
+            return response.text
+        except Exception as e:
+            self.logger.error(f"Gemini vision call failed: {e}")
+            return None
+
     def extract_concepts_from_text(self, page_number: int, text: str) -> ExtractionResponse:
         if not text.strip():
             return ExtractionResponse(success=True, page_number=page_number, concepts=[])
