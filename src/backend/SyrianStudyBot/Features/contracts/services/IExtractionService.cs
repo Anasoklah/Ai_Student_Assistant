@@ -1,7 +1,7 @@
 using SyrianStudyBot.Features.Documents.Dtos;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
-namespace SyrianStudyBot.Interfaces;
+namespace SyrianStudyBot.Features.contracts.services;
 
 public interface IExtractionService
 {

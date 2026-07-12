@@ -1,15 +1,22 @@
 using System.Text.RegularExpressions;
 using Pgvector;
-using SyrianStudyBot.Infrastructure.Persistence;
+using SyrianStudyBot.Features.Documents.Mappers;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Interfaces;
-using SyrianStudyBot.Features.Documents.Mappers;
+using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Infrastructure.Documents;
 
+/// <summary>
+/// Handles document ingestion: builds text chunks from extracted pages,
+/// generates embeddings, and persists everything via IDocumentRepository.
+/// 
+/// This service contains BUSINESS LOGIC only (chunking, title extraction).
+/// All database operations go through IDocumentRepository.
+/// </summary>
 public class DocumentIngestionService(
-    AppDbContext db,
+    IDocumentRepository docRepo,
     IEmbeddingService embeddingService,
     ILogger<DocumentIngestionService> logger) : IDocumentIngestionService
 {
@@ -23,20 +30,20 @@ public class DocumentIngestionService(
         var document = DocumentMappers.ToEntity(requestDto);
 
         // Step 1: Save document first to get its ID
-        db.Documents.Add(document);
-        await db.SaveChangesAsync(cancellationToken);
+        docRepo.Add(document);
+        await docRepo.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Saved document '{Title}' with ID {DocumentId}", document.Title, document.Id);
 
-        // Step 2: Save book structure if provided
+        // Step 2: Save book structure if provided (via repository)
         Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>? pageLookup = null;
         if (requestDto.Structure is { Chapters.Count: > 0 })
         {
-            pageLookup = await SaveStructureAsync(document.Id, requestDto.Structure, cancellationToken);
-            logger.LogInformation("Saved {ChapterCount} chapters and {SectionCount} sections",
-                requestDto.Structure.Chapters.Count, requestDto.Structure.Sections.Count);
+            pageLookup = await docRepo.SaveBookStructureAsync(document.Id, requestDto.Structure, cancellationToken);
+            logger.LogInformation("Saved book structure with {Count} chapters",
+                requestDto.Structure.Chapters.Count);
         }
 
-        // Step 3: Build chunks
+        // Step 3: Build chunks from extraction results (business logic)
         var chunks = BuildChunksFromExtractionResults(requestDto.Pages);
         logger.LogInformation("Built {Count} chunks from extraction results", chunks.Count);
 
@@ -77,120 +84,10 @@ public class DocumentIngestionService(
             document.Chunks.Add(chunk);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await docRepo.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Saved document '{Title}' with {ChunkCount} chunks to database", document.Title, document.Chunks.Count);
         return document;
-    }
-
-    private async Task<Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>> SaveStructureAsync(
-        Guid documentId,
-        BookStructureDto structure,
-        CancellationToken cancellationToken)
-    {
-        // Build page→structure lookup
-        var pageLookup = new Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>();
-
-        // Collect all entries sorted by page number
-        var allEntries = structure.Chapters
-            .Concat(structure.Sections)
-            .Where(e => e.PageNumber.HasValue)
-            .OrderBy(e => e.PageNumber!.Value)
-            .ToList();
-
-        // Create chapter entities
-        var chapterEntities = new List<BookChapter>();
-        foreach (var chapterDto in structure.Chapters)
-        {
-            var chapter = new BookChapter
-            {
-                Id = Guid.NewGuid(),
-                DocumentId = documentId,
-                Title = chapterDto.Title,
-                NormalizedTitle = chapterDto.Title.Trim(),
-                StartPage = chapterDto.PageNumber
-            };
-            chapterEntities.Add(chapter);
-            db.BookChapters.Add(chapter);
-        }
-
-        // Create section entities (linked to their parent chapter)
-        foreach (var sectionDto in structure.Sections)
-        {
-            // Find parent chapter by title match
-            var parentChapter = chapterEntities.FirstOrDefault(c =>
-                c.Title == sectionDto.ParentChapter);
-
-            var section = new BookSection
-            {
-                Id = Guid.NewGuid(),
-                ChapterId = parentChapter?.Id ?? chapterEntities.FirstOrDefault()?.Id ?? Guid.NewGuid(),
-                Title = sectionDto.Title,
-                NormalizedTitle = sectionDto.Title.Trim(),
-                StartPage = sectionDto.PageNumber
-            };
-            db.BookSections.Add(section);
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        // Compute EndPage for each entry (next entry's StartPage - 1)
-        var sortedChapters = chapterEntities.OrderBy(c => c.StartPage ?? int.MaxValue).ToList();
-        var sortedSections = db.BookSections.Where(s => s.Chapter.DocumentId == documentId)
-            .OrderBy(s => s.StartPage ?? int.MaxValue).ToList();
-
-        for (var i = 0; i < sortedChapters.Count; i++)
-        {
-            var nextStart = i + 1 < sortedChapters.Count
-                ? sortedChapters[i + 1].StartPage
-                : null;
-            sortedChapters[i].EndPage = nextStart.HasValue ? nextStart.Value - 1 : null;
-        }
-
-        for (var i = 0; i < sortedSections.Count; i++)
-        {
-            var nextStart = i + 1 < sortedSections.Count
-                ? sortedSections[i + 1].StartPage
-                : null;
-            sortedSections[i].EndPage = nextStart.HasValue ? nextStart.Value - 1 : null;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        // Build the lookup: for each page, find which chapter and section it belongs to
-        foreach (var chapter in sortedChapters)
-        {
-            if (!chapter.StartPage.HasValue) continue;
-
-            var endPage = chapter.EndPage ?? int.MaxValue;
-            for (var page = chapter.StartPage.Value; page <= endPage; page++)
-            {
-                pageLookup[page] = (chapter.Id, null, chapter.Title, null);
-            }
-        }
-
-        foreach (var section in sortedSections)
-        {
-            if (!section.StartPage.HasValue) continue;
-
-            var endPage = section.EndPage ?? int.MaxValue;
-            for (var page = section.StartPage.Value; page <= endPage; page++)
-            {
-                if (pageLookup.TryGetValue(page, out var existing))
-                {
-                    // Page already has a chapter, add section info
-                    pageLookup[page] = (existing.ChapterId, section.Id, existing.ChapterTitle, section.Title);
-                }
-                else
-                {
-                    // Page has a section but no chapter (shouldn't happen, but handle gracefully)
-                    pageLookup[page] = (section.ChapterId, section.Id, string.Empty, section.Title);
-                }
-            }
-        }
-
-        logger.LogInformation("Built page lookup with {Count} entries", pageLookup.Count);
-        return pageLookup;
     }
 
     private static List<SegmentChunk> BuildChunksFromExtractionResults(IReadOnlyList<ExtractedPageDto> pages)

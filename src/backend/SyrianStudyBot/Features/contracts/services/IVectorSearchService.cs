@@ -1,7 +1,7 @@
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 
-namespace SyrianStudyBot.Interfaces;
+namespace SyrianStudyBot.Features.contracts.services;
 
 public interface IVectorSearchService
 {

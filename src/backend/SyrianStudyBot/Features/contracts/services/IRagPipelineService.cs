@@ -1,7 +1,6 @@
-using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Enums;
 
-namespace SyrianStudyBot.Interfaces;
+namespace SyrianStudyBot.Features.contracts.services;
 
 public interface IRagPipelineService
 {

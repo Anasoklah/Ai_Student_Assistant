@@ -1,17 +1,25 @@
-using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Infrastructure.Persistence;
+using SyrianStudyBot.Features.contracts.repositories;
 
 namespace SyrianStudyBot.Infrastructure.Common;
 
+/// <summary>
+/// Tracks per-user daily usage metrics (message counts, upload counts).
+/// All database operations go through IUsageRepository.
+/// 
+/// Note: This service typically only calls Add() without SaveChangesAsync.
+/// The consuming UseCase (e.g., ChatUseCase) is responsible for the final
+/// SaveChangesAsync, since it may also be persisting other entities
+/// (messages, session updates) in the same transaction.
+/// </summary>
 public class UsageTrackingService : IUsageTrackingService
 {
-    private readonly AppDbContext _db;
+    private readonly IUsageRepository _usageRepo;
 
-    public UsageTrackingService(AppDbContext db)
+    public UsageTrackingService(IUsageRepository usageRepo)
     {
-        _db = db;
+        _usageRepo = usageRepo;
     }
 
     public void ResetMessageCounterIfNeeded(ApplicationUser user)
@@ -37,12 +45,11 @@ public class UsageTrackingService : IUsageTrackingService
     public async Task UpsertDailyUsageAsync(Guid userId, CancellationToken cancellationToken)
     {
         var today = DateTime.UtcNow.Date;
-        var usage = await _db.DailyUsageLogs
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.Date == today, cancellationToken);
+        var usage = await _usageRepo.GetTodayLogAsync(userId, cancellationToken);
 
         if (usage is null)
         {
-            _db.DailyUsageLogs.Add(new DailyUsageLog
+            _usageRepo.Add(new DailyUsageLog
             {
                 UserId = userId,
                 Date = today,
@@ -57,12 +64,11 @@ public class UsageTrackingService : IUsageTrackingService
     public async Task UpsertUploadUsageAsync(Guid userId, CancellationToken cancellationToken)
     {
         var today = DateTime.UtcNow.Date;
-        var usage = await _db.DailyUsageLogs
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.Date == today, cancellationToken);
+        var usage = await _usageRepo.GetTodayLogAsync(userId, cancellationToken);
 
         if (usage is null)
         {
-            _db.DailyUsageLogs.Add(new DailyUsageLog
+            _usageRepo.Add(new DailyUsageLog
             {
                 UserId = userId,
                 Date = today,

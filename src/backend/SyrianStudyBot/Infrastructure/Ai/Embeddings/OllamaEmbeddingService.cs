@@ -1,6 +1,6 @@
 using OllamaSharp;
 using OllamaSharp.Models;
-using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Embeddings;
 

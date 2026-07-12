@@ -1,22 +1,26 @@
-using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Features.Documents.Mappers;
 using SyrianStudyBot.Infrastructure.Documents.Validation;
 using SyrianStudyBot.Infrastructure.Documents;
-using SyrianStudyBot.Infrastructure.Persistence;
-using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Infrastructure.Common;
 using Microsoft.Extensions.Options;
 using SyrianStudyBot.Infrastructure.Identity;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
+using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Features.Documents.UseCases;
 
+/// <summary>
+/// Orchestrates document upload and ingestion: extracts pages from PDF,
+/// optionally extracts book structure (TOC), and delegates to
+/// DocumentIngestionService for chunking and embedding.
+/// Relies on IDocumentRepository for all database operations.
+/// </summary>
 public class DocumentUseCase : IDocumentUseCase
 {
-    private readonly AppDbContext _db;
+    private readonly IDocumentRepository _docRepo;
     private readonly IUserContextService _userContext;
     private readonly IDocumentIngestionService _ingestion;
     private readonly IDocumentIngestionValidator _documentValidator;
@@ -29,14 +33,14 @@ public class DocumentUseCase : IDocumentUseCase
     };
 
     public DocumentUseCase(
-        AppDbContext db,
+        IDocumentRepository docRepo,
         IDocumentIngestionService ingestion,
         IDocumentIngestionValidator documentValidator,
         IExtractionService ExtractionService,
         IUserContextService userContext,
         IOptions<DocumentUploadOptions> uploadOptions)
     {
-        _db = db;
+        _docRepo = docRepo;
         _userContext = userContext;
         _ingestion = ingestion;
         _documentValidator = documentValidator;
@@ -93,7 +97,7 @@ public class DocumentUseCase : IDocumentUseCase
                     structure = DocumentMappers.ToBookStructureDto(structureResult);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Graceful degradation: structure extraction failure should not block ingestion
             }
@@ -106,35 +110,34 @@ public class DocumentUseCase : IDocumentUseCase
         return DocumentMappers.MapToStudentDto(document);
     }
 
+    // Student endpoint: GET /api/documents
+    public async Task<PagedResponse<DocumentDto>> GetMyDocumentsAsync(
+        int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var userId = _userContext.GetCurrentUserId();
+        var entityPage = await _docRepo.GetUserDocumentsAsync(userId, page, pageSize, cancellationToken);
 
- 
-   // Student endpoint: GET /api/documents
-public async Task<PagedResponse<DocumentDto>> GetMyDocumentsAsync(
-    int page, int pageSize, CancellationToken cancellationToken = default)
-{
-    var userId = _userContext.GetCurrentUserId();
+        return new PagedResponse<DocumentDto>(
+            entityPage.Items.Select(d => DocumentMappers.MapToStudentDto(d)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
+    }
 
-    
-    return await _db.Documents
-        .Where(d => d.UploadedByUserId == userId)
-        .OrderByDescending(d => d.UploadedAt)
-        .Select(d => DocumentMappers.MapToStudentDto(d))
-        .ToPagedResponseAsync(page, pageSize, cancellationToken);
-}
+    // Admin endpoint: GET /api/admin/documents
+    public async Task<PagedResponse<AdminDocumentDto>> GetAllDocumentsAsync(
+        int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var entityPage = await _docRepo.GetAllDocumentsAsync(page, pageSize, cancellationToken);
 
-// Admin endpoint: GET /api/admin/documents
-public async Task<PagedResponse<AdminDocumentDto>> GetAllDocumentsAsync(
-    int page, int pageSize, CancellationToken cancellationToken = default)
-{
-    
-    return await _db.Documents
-        .OrderByDescending(d => d.UploadedAt)
-        .Select(d => DocumentMappers.MapToAdminDto(d))
-        .ToPagedResponseAsync(page, pageSize, cancellationToken);
-}
+        return new PagedResponse<AdminDocumentDto>(
+            entityPage.Items.Select(d => DocumentMappers.MapToAdminDto(d)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
+    }
 
-
-    #region Helpers 
+    #region Helpers
     private static IReadOnlyList<ExtractedPageDto> ConvertImageResultToPages(ImageExtractionResponse result)
     {
         return new List<ExtractedPageDto>
@@ -152,7 +155,7 @@ public async Task<PagedResponse<AdminDocumentDto>> GetAllDocumentsAsync(
             }
         };
     }
-        
+
     private void ValidateReadablePages(DocumentIngestionCommand request)
     {
         var validationError = _documentValidator.ValidateIngestionRequest(request);
@@ -161,5 +164,4 @@ public async Task<PagedResponse<AdminDocumentDto>> GetAllDocumentsAsync(
     }
 
     #endregion
-
 }

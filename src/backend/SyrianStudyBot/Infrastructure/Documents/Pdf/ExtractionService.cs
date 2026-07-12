@@ -1,7 +1,7 @@
 using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Infrastructure.Ai.Extraction;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Infrastructure.Documents.Pdf;
 

@@ -1,32 +1,35 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Features.Chat.Mappers;
 using SyrianStudyBot.Infrastructure.Common;
-using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Features.Chat.Dtos;
-using SyrianStudyBot.Interfaces;
+using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Features.Chat.UseCases;
 
+/// <summary>
+/// Orchestrates chat operations: creating sessions, listing messages, and handling Q&A.
+/// Relies on IChatRepository for all database operations and IRagPipelineService
+/// for AI-powered retrieval-augmented generation.
+/// </summary>
 public class ChatUseCase : IChatUseCase
 {
-    private readonly AppDbContext _db;
+    private readonly IChatRepository _chatRepo;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IRagPipelineService _ragPipeline;
-   
     private readonly IUsageTrackingService _usageTrackingService;
 
     public ChatUseCase(
-        AppDbContext db,
+        IChatRepository chatRepo,
         UserManager<ApplicationUser> userManager,
         IRagPipelineService ragPipeline,
         IUsageTrackingService usageTrackingService)
     {
-        _db = db;
+        _chatRepo = chatRepo;
         _userManager = userManager;
         _ragPipeline = ragPipeline;
         _usageTrackingService = usageTrackingService;
@@ -40,43 +43,36 @@ public class ChatUseCase : IChatUseCase
             Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim(),
         };
 
-        _db.ChatSessions.Add(session);
-        await _db.SaveChangesAsync(cancellationToken);
+        _chatRepo.AddSession(session);
+        await _chatRepo.SaveChangesAsync(cancellationToken);
 
-        return ChatMappers.ToSessionResponeDto(session , true);
+        return ChatMappers.ToSessionResponeDto(session, true);
     }
 
     public async Task<PagedResponse<ChatSessionResponseDto>> GetSessionsAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
+        var entityPage = await _chatRepo.GetUserSessionsAsync(userId, page, pageSize, cancellationToken);
 
-        var query = _db.ChatSessions
-            .Where(s => s.UserId == userId)
-            .OrderByDescending(s => s.LastActiveAt);
-
-        
-        return await query
-            .Select(s => ChatMappers.ToSessionResponeDto(s , true))
-            .ToPagedResponseAsync(page , pageSize ,cancellationToken);
-
-   
+        return new PagedResponse<ChatSessionResponseDto>(
+            entityPage.Items.Select(s => ChatMappers.ToSessionResponeDto(s, true)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
     }
 
     public async Task<PagedResponse<ChatMessageResponseDto>> GetMessagesAsync(Guid userId, Guid sessionId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-
-        var ownsSession = await _db.ChatSessions.AnyAsync(s => s.Id == sessionId && s.UserId == userId, cancellationToken);
+        var ownsSession = await _chatRepo.SessionExistsAsync(sessionId, userId, cancellationToken);
         if (!ownsSession)
             throw new KeyNotFoundException("Chat session not found");
 
-        var query = _db.ChatMessages
-            .Where(m => m.SessionId == sessionId)
-            .OrderBy(m => m.Timestamp);
+        var entityPage = await _chatRepo.GetSessionMessagesAsync(sessionId, page, pageSize, cancellationToken);
 
-        return await query
-            .Select(m => ChatMappers.ToMessageResponse(m , true))
-            .ToPagedResponseAsync(page , pageSize , cancellationToken);
-
-     
+        return new PagedResponse<ChatMessageResponseDto>(
+            entityPage.Items.Select(m => ChatMappers.ToMessageResponse(m, true)).ToList(),
+            entityPage.Page,
+            entityPage.PageSize,
+            entityPage.TotalCount);
     }
 
     public async Task<AskQuestionResponseDto> AskAsync(Guid userId, Guid sessionId, AskQuestionRequestDto request, CancellationToken cancellationToken = default)
@@ -90,8 +86,7 @@ public class ChatUseCase : IChatUseCase
         if (user.MessagesToday >= dailyLimit)
             throw new RateLimitExceededException("Daily message limit reached");
 
-        var session = await _db.ChatSessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId && s.IsActive, cancellationToken);
+        var session = await _chatRepo.GetSessionByIdAsync(sessionId, userId, cancellationToken);
         if (session is null)
             throw new KeyNotFoundException("Chat session not found");
 
@@ -103,8 +98,8 @@ public class ChatUseCase : IChatUseCase
             Content = question
         };
 
-        _db.ChatMessages.Add(userMessage);
-        await _db.SaveChangesAsync(cancellationToken);
+        _chatRepo.AddMessage(userMessage);
+        await _chatRepo.SaveChangesAsync(cancellationToken);
 
         var answer = await _ragPipeline.QueryAsync(
             question,
@@ -123,7 +118,7 @@ public class ChatUseCase : IChatUseCase
             Content = answer
         };
 
-        _db.ChatMessages.Add(assistantMessage);
+        _chatRepo.AddMessage(assistantMessage);
 
         if (string.IsNullOrWhiteSpace(session.Title))
             session.Title = question.Length <= 80 ? question : question[..80];
@@ -132,13 +127,13 @@ public class ChatUseCase : IChatUseCase
         user.MessagesToday++;
         await _usageTrackingService.UpsertDailyUsageAsync(user.Id, cancellationToken);
         await _userManager.UpdateAsync(user);
-        await _db.SaveChangesAsync(cancellationToken);
+        await _chatRepo.SaveChangesAsync(cancellationToken);
 
         return new AskQuestionResponseDto
         {
             Answer = answer,
-            UserMessage = ChatMappers.ToMessageResponse(userMessage , true),
-            AssistantMessage = ChatMappers.ToMessageResponse(assistantMessage , true)
+            UserMessage = ChatMappers.ToMessageResponse(userMessage, true),
+            AssistantMessage = ChatMappers.ToMessageResponse(assistantMessage, true)
         };
     }
 }

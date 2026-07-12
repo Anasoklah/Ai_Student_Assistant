@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SyrianStudyBot.Interfaces;
 using SyrianStudyBot.Features.Rag.Dtos;
+using SyrianStudyBot.Features.contracts.services;
 
 namespace SyrianStudyBot.Features.Rag.Controllers;
 
