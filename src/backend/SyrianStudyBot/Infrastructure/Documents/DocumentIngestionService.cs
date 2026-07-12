@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Pgvector;
 using SyrianStudyBot.Features.Documents.Mappers;
 using SyrianStudyBot.Domain.Entities;
@@ -12,7 +11,7 @@ namespace SyrianStudyBot.Infrastructure.Documents;
 /// Handles document ingestion: builds text chunks from extracted pages,
 /// generates embeddings, and persists everything via IDocumentRepository.
 /// 
-/// This service contains BUSINESS LOGIC only (chunking, title extraction).
+/// This service contains BUSINESS LOGIC only (chunking).
 /// All database operations go through IDocumentRepository.
 /// </summary>
 public class DocumentIngestionService(
@@ -75,7 +74,7 @@ public class DocumentIngestionService(
                 {
                     chunk.ChapterId = mapping.ChapterId;
                     chunk.SectionId = mapping.SectionId;
-                    // Override heuristic titles with actual structure titles
+                    // Set titles from authoritative structure data
                     chunk.ChapterTitle = mapping.ChapterTitle;
                     chunk.SectionTitle = mapping.SectionTitle;
                 }
@@ -96,65 +95,25 @@ public class DocumentIngestionService(
 
         foreach (var page in pages)
         {
-            var pageChunks = BuildChunksFromPage(page);
-            if (pageChunks.Count == 0 && !string.IsNullOrWhiteSpace(page.Text))
+            bool hasConceptChunks = false;
+
+            foreach (var concept in page.Concepts)
             {
-                pageChunks = SplitTextIntoChunks(page.PageNumber, null, null, page.Text);
+                var content = concept.Content?.Trim();
+                if (string.IsNullOrWhiteSpace(content))
+                    continue;
+
+                hasConceptChunks = true;
+                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, content));
             }
 
-            chunks.AddRange(pageChunks);
+            if (!hasConceptChunks && !string.IsNullOrWhiteSpace(page.Text))
+            {
+                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, page.Text));
+            }
         }
 
         return chunks;
-    }
-
-    private static List<SegmentChunk> BuildChunksFromPage(ExtractedPageDto page)
-    {
-        if (page.Concepts.Count == 0)
-            return new List<SegmentChunk>();
-
-        return page.Concepts
-            .SelectMany(concept => BuildChunksFromConcept(page.PageNumber, concept))
-            .ToList();
-    }
-
-    private static IEnumerable<SegmentChunk> BuildChunksFromConcept(int pageNumber, ExtractedConceptDto concept)
-    {
-        var content = concept.Content?.Trim();
-        if (string.IsNullOrWhiteSpace(content))
-            return Enumerable.Empty<SegmentChunk>();
-
-        var chapterTitle = TryExtractChapterTitle(concept.Title);
-        var sectionTitle = TryExtractSectionTitle(concept.Title);
-        var title = concept.Title?.Trim();
-
-        if (chapterTitle is not null)
-            return SplitTextIntoChunks(pageNumber, chapterTitle, null, content);
-
-        if (sectionTitle is not null)
-            return SplitTextIntoChunks(pageNumber, null, sectionTitle, content);
-
-        return SplitTextIntoChunks(pageNumber, null, title, content);
-    }
-
-    private static string? TryExtractChapterTitle(string? title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-            return null;
-
-        return Regex.IsMatch(title.Trim(), "^(الفصل|الوحدة|الباب|المحور)", RegexOptions.IgnoreCase)
-            ? title.Trim()
-            : null;
-    }
-
-    private static string? TryExtractSectionTitle(string? title)
-    {
-        if (string.IsNullOrWhiteSpace(title))
-            return null;
-
-        return Regex.IsMatch(title.Trim(), "^(الدرس|درس)", RegexOptions.IgnoreCase)
-            ? title.Trim()
-            : null;
     }
 
     private sealed record SegmentChunk(
