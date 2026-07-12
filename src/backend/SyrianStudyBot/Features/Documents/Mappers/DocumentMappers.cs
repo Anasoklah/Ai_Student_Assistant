@@ -1,6 +1,7 @@
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Features.Documents.Mappers;
 
@@ -52,7 +53,8 @@ public static class DocumentMappers
     public static DocumentIngestionCommand ToIngestionCommand(
         UploadDocumentRequest request, 
         IReadOnlyList<ExtractedPageDto> pages,
-        Guid uploadedByUserId) => new()
+        Guid uploadedByUserId,
+        BookStructureDto? structure = null) => new()
     {
         Title = request.Title,
         Subject = request.Subject,
@@ -63,6 +65,28 @@ public static class DocumentMappers
         DocumentType = DocumentType.OfficialBook,
         UploadedByUserId = uploadedByUserId,
         FileSizeBytes = request.File.Length,
-        Pages = pages
+        Pages = pages,
+        Structure = structure
     };
+
+    public static BookStructureDto ToBookStructureDto(DocumentStructureResult structure)
+    {
+        return new BookStructureDto
+        {
+            Chapters = structure.Chapters.Select(c => new BookStructureEntryDto
+            {
+                Title = c.Title,
+                PageNumber = c.PageNumber,
+                Level = c.Level,
+                ParentChapter = c.ParentChapter
+            }).ToList(),
+            Sections = structure.Sections.Select(s => new BookStructureEntryDto
+            {
+                Title = s.Title,
+                PageNumber = s.PageNumber,
+                Level = s.Level,
+                ParentChapter = s.ParentChapter
+            }).ToList()
+        };
+    }
 }

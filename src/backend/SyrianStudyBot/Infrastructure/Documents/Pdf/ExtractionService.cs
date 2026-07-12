@@ -69,4 +69,32 @@ public class ExtractionService(
             throw;
         }
     }
+
+    public async Task<DocumentStructureResult?> ExtractStructureAsync(
+        Stream pdfStream,
+        int tocPage,
+        CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Starting AI service structure extraction (TOC page: {TocPage})", tocPage);
+
+        try
+        {
+            var result = await aiExtractionClient.ExtractBookStructureAsync(pdfStream, tocPage, cancellationToken);
+
+            if (!result.Success || result.Structure is null)
+            {
+                logger.LogWarning("Structure extraction failed: {Error}", result.ErrorMessage);
+                return null;
+            }
+
+            logger.LogInformation("Structure extraction completed: {Entries} entries (method: {Method})",
+                result.Structure.TotalEntries, result.Structure.ExtractionMethod);
+            return result.Structure;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "AI service structure extraction failed");
+            return null;
+        }
+    }
 }

@@ -77,7 +77,29 @@ public class DocumentUseCase : IDocumentUseCase
                 cancellationToken);
         }
 
-        var ingestionRequest = DocumentMappers.ToIngestionCommand(request, pages, _userContext.GetCurrentUserId());
+        // Extract book structure if TocPage is provided
+        BookStructureDto? structure = null;
+        if (request.TocPage.HasValue && ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var structureResult = await _ExtractionService.ExtractStructureAsync(
+                    request.File.OpenReadStream(),
+                    request.TocPage.Value,
+                    cancellationToken);
+
+                if (structureResult is not null)
+                {
+                    structure = DocumentMappers.ToBookStructureDto(structureResult);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Graceful degradation: structure extraction failure should not block ingestion
+            }
+        }
+
+        var ingestionRequest = DocumentMappers.ToIngestionCommand(request, pages, _userContext.GetCurrentUserId(), structure);
         ValidateReadablePages(ingestionRequest);
 
         var document = await _ingestion.IngestAsync(ingestionRequest, cancellationToken);

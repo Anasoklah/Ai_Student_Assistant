@@ -15,4 +15,9 @@ public interface IExtractionService
         Stream imageStream,
         string fileName,
         CancellationToken cancellationToken = default);
+
+    Task<DocumentStructureResult?> ExtractStructureAsync(
+        Stream pdfStream,
+        int tocPage,
+        CancellationToken cancellationToken = default);
 }

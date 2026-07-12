@@ -13,5 +13,6 @@ public class UploadDocumentRequest
     public string? Language { get; init; }
     public int? StartPage {get;init;}
     public int? EndPage {get;init;}
+    public int? TocPage { get; init; }
     public IFormFile File { get; init; } = null!;
 }

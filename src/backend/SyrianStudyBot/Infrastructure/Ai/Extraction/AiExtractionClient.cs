@@ -143,6 +143,34 @@ public class AiExtractionClient : IAiExtractionClient
         }) ?? throw new InvalidOperationException("Failed to deserialize image extraction response");
     }
 
+    public async Task<StructureExtractionResponse> ExtractBookStructureAsync(
+        Stream pdfStream,
+        int tocPage,
+        CancellationToken cancellationToken = default)
+    {
+        using var formData = new MultipartFormDataContent();
+
+        var fileContent = new StreamContent(pdfStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        formData.Add(fileContent, "file", "document.pdf");
+
+        formData.Add(new StringContent(tocPage.ToString()), "toc_page");
+
+        var response = await _httpClient.PostAsync("/api/v1/extraction/extract-book-structure", formData, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Failed to extract book structure: {response.StatusCode} - {errorContent}");
+        }
+
+        var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+        return JsonSerializer.Deserialize<StructureExtractionResponse>(jsonResponse, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new InvalidOperationException("Failed to deserialize structure extraction response");
+    }
+
     public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesFromJobAsync(
         string jobId,
         CancellationToken cancellationToken = default)

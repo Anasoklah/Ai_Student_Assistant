@@ -37,6 +37,21 @@ public class DocumentIngestionCommand
     public Guid UploadedByUserId { get; init; }
     public long FileSizeBytes { get; init; }
     public IReadOnlyList<ExtractedPageDto> Pages { get; init; } = [];
+    public BookStructureDto? Structure { get; init; }
 }
 
 // Keep UploadDocumentRequest as is - it's the API contract with IFormFile
+
+public class BookStructureEntryDto
+{
+    public string Title { get; init; } = string.Empty;
+    public int? PageNumber { get; init; }
+    public string Level { get; init; } = "Section";
+    public string? ParentChapter { get; init; }
+}
+
+public class BookStructureDto
+{
+    public List<BookStructureEntryDto> Chapters { get; init; } = [];
+    public List<BookStructureEntryDto> Sections { get; init; } = [];
+}
