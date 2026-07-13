@@ -57,7 +57,7 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=studybot_phase3;Username=postgres;Password=${DB_PASSWORD:-dev_password}
       AiService__BaseUrl: http://ai-service:8000
       AiService__PollingIntervalSeconds: ${AiService__PollingIntervalSeconds:-5}
-      AiService__TimeoutMinutes: ${AiService__TimeoutMinutes:-30}
+      AiService__TimeoutMinutes: ${AiService__TimeoutMinutes:-180}
       AiService__Enabled: ${AiService__Enabled:-false}
       Jwt__Secret: ${Jwt__Secret:-}
       Jwt__Issuer: ${Jwt__Issuer:-YourApp}

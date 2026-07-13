@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Dtos;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Extraction;
@@ -146,6 +146,7 @@ public class AiExtractionClient : IAiExtractionClient
     public async Task<StructureExtractionResponse> ExtractBookStructureAsync(
         Stream pdfStream,
         int tocPage,
+        int? tocPageEnd,
         CancellationToken cancellationToken = default)
     {
         using var formData = new MultipartFormDataContent();
@@ -155,7 +156,7 @@ public class AiExtractionClient : IAiExtractionClient
         formData.Add(fileContent, "file", "document.pdf");
 
         formData.Add(new StringContent(tocPage.ToString()), "toc_page");
-
+        formData.Add(new StringContent(tocPageEnd.ToString()), "toc_page_end");
         var response = await _httpClient.PostAsync("/api/v1/extraction/extract-book-structure", formData, cancellationToken);
 
         if (!response.IsSuccessStatusCode)

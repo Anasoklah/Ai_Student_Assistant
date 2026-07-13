@@ -1,4 +1,4 @@
-using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Documents.Validation;
 

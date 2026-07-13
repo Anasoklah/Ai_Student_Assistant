@@ -89,8 +89,9 @@ builder.Services.AddAiExtractionClient(builder.Configuration);
 var app = builder.Build();
 
 // Seed data
-await ServiceCollectionExtensions.SeedRoles(app.Services);
-await ServiceCollectionExtensions.SeedAdminUser(app.Services);
+await StartupSeeder.SeedRoles(app.Services);
+await StartupSeeder.SeedAdminUser(app.Services);
+await StartupSeeder.ReconcileStaleDocuments(app.Services);
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())

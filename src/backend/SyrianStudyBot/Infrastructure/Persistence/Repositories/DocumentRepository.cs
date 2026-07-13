@@ -3,8 +3,13 @@ using Pgvector.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
-using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Application.Documents.Dtos;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Payments;
+using SyrianStudyBot.Application.Quiz;
+using SyrianStudyBot.Application.Auth;
+using SyrianStudyBot.Application.Common;
 
 namespace SyrianStudyBot.Infrastructure.Persistence.Repositories;
 
@@ -24,10 +29,18 @@ public class DocumentRepository : IDocumentRepository
 
     // ── Document queries ──
 
+    public async Task<Document?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        return await _db.Documents
+            .Include(d => d.Chunks)
+            .Include(d => d.Chapters)
+            .FirstOrDefaultAsync(d => d.Id == id, ct);
+    }
+
     public async Task<EntityPage<Document>> GetUserDocumentsAsync(Guid userId, int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Documents
-            .Where(d => d.UploadedByUserId == userId)
+            .Where(d => d.UploadedByUserId == userId && d.Status == DocumentStatus.Ready)
             .OrderByDescending(d => d.UploadedAt);
 
         return await PaginateAsync(query, page, pageSize, ct);

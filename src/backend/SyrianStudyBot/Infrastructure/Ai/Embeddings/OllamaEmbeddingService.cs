@@ -1,6 +1,8 @@
 using OllamaSharp;
 using OllamaSharp.Models;
-using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Rag;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Embeddings;
 

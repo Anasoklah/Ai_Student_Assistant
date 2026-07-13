@@ -1,9 +1,14 @@
 using Pgvector;
-using SyrianStudyBot.Features.Documents.Mappers;
+using SyrianStudyBot.Application.Documents.Mappers;
 using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Features.contracts.repositories;
-using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Application.Documents.Dtos;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Payments;
+using SyrianStudyBot.Application.Quiz;
+using SyrianStudyBot.Application.Auth;
+using SyrianStudyBot.Application.Common;
+using SyrianStudyBot.Application.Rag;
 
 namespace SyrianStudyBot.Infrastructure.Documents;
 
@@ -28,30 +33,37 @@ public class DocumentIngestionService(
 
         var document = DocumentMappers.ToEntity(requestDto);
 
-        // Step 1: Save document first to get its ID
         docRepo.Add(document);
         await docRepo.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Saved document '{Title}' with ID {DocumentId}", document.Title, document.Id);
 
-        // Step 2: Save book structure if provided (via repository)
+        await AttachExtractedContentAsync(document, requestDto.Pages, requestDto.Structure, cancellationToken);
+        await docRepo.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("Saved document '{Title}' with {ChunkCount} chunks to database", document.Title, document.Chunks.Count);
+        return document;
+    }
+
+    public async Task AttachExtractedContentAsync(
+        Document document,
+        IReadOnlyList<ExtractedPageDto> pages,
+        BookStructureDto? structure,
+        CancellationToken cancellationToken = default)
+    {
         Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>? pageLookup = null;
-        if (requestDto.Structure is { Chapters.Count: > 0 })
+        if (structure is { Chapters.Count: > 0 })
         {
-            pageLookup = await docRepo.SaveBookStructureAsync(document.Id, requestDto.Structure, cancellationToken);
-            logger.LogInformation("Saved book structure with {Count} chapters",
-                requestDto.Structure.Chapters.Count);
+            pageLookup = await docRepo.SaveBookStructureAsync(document.Id, structure, cancellationToken);
+            logger.LogInformation("Saved book structure with {Count} chapters", structure.Chapters.Count);
         }
 
-        // Step 3: Build chunks from extraction results (business logic)
-        var chunks = BuildChunksFromExtractionResults(requestDto.Pages);
+        var chunks = BuildChunksFromExtractionResults(pages);
         logger.LogInformation("Built {Count} chunks from extraction results", chunks.Count);
 
-        // Step 4: Generate embeddings
         var embeddings = await embeddingService.GenerateEmbeddingsAsync(
             chunks.Select(c => c.Text).ToList(), cancellationToken);
         logger.LogInformation("Generated {Count} embeddings", embeddings.Count);
 
-        // Step 5: Create DocumentChunks with structure mapping
         for (var i = 0; i < chunks.Count; i++)
         {
             var chunk = new DocumentChunk
@@ -67,14 +79,12 @@ public class DocumentIngestionService(
                 Embedding = new Vector(embeddings[i])
             };
 
-            // Map to structure if available
             if (pageLookup is not null)
             {
                 if (pageLookup.TryGetValue(chunks[i].PageNumber, out var mapping))
                 {
                     chunk.ChapterId = mapping.ChapterId;
                     chunk.SectionId = mapping.SectionId;
-                    // Set titles from authoritative structure data
                     chunk.ChapterTitle = mapping.ChapterTitle;
                     chunk.SectionTitle = mapping.SectionTitle;
                 }
@@ -82,11 +92,6 @@ public class DocumentIngestionService(
 
             document.Chunks.Add(chunk);
         }
-
-        await docRepo.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("Saved document '{Title}' with {ChunkCount} chunks to database", document.Title, document.Chunks.Count);
-        return document;
     }
 
     private static List<SegmentChunk> BuildChunksFromExtractionResults(IReadOnlyList<ExtractedPageDto> pages)

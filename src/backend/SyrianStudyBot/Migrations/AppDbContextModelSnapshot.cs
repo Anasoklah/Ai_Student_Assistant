@@ -312,7 +312,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("DocumentId", "ChapterNumber")
                         .IsUnique();
 
-                    b.ToTable("BookChapters", (string)null);
+                    b.ToTable("BookChapters");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.BookSection", b =>
@@ -350,7 +350,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("ChapterId", "SectionNumber")
                         .IsUnique();
 
-                    b.ToTable("BookSections", (string)null);
+                    b.ToTable("BookSections");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.ChatMessage", b =>
@@ -398,7 +398,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("Timestamp");
 
-                    b.ToTable("ChatMessages", (string)null);
+                    b.ToTable("ChatMessages");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.ChatSession", b =>
@@ -406,9 +406,6 @@ namespace SyrianStudyBot.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<string>("ChapterFilter")
-                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -418,13 +415,6 @@ namespace SyrianStudyBot.Migrations
 
                     b.Property<DateTime>("LastActiveAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("SectionFilter")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Subject")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -440,13 +430,11 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("LastActiveAt");
 
-                    b.HasIndex("Subject");
-
                     b.HasIndex("UserId");
 
                     b.HasIndex("UserId", "LastActiveAt");
 
-                    b.ToTable("ChatSessions", (string)null);
+                    b.ToTable("ChatSessions");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.DailyUsageLog", b =>
@@ -481,7 +469,7 @@ namespace SyrianStudyBot.Migrations
                     b.HasIndex("UserId", "Date")
                         .IsUnique();
 
-                    b.ToTable("DailyUsageLogs", (string)null);
+                    b.ToTable("DailyUsageLogs");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.Document", b =>
@@ -508,17 +496,28 @@ namespace SyrianStudyBot.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<bool>("IsApproved")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Language")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceName")
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Processing");
+
+                    b.Property<string>("StatusMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -542,21 +541,24 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("GradeLevel");
 
-                    b.HasIndex("IsApproved");
+                    b.HasIndex("Status");
 
                     b.HasIndex("Subject");
 
                     b.HasIndex("UploadedByUserId");
 
-                    b.HasIndex("Subject", "GradeLevel", "DocumentType", "IsApproved");
+                    b.HasIndex("Subject", "GradeLevel", "DocumentType");
 
-                    b.ToTable("Documents", (string)null);
+                    b.ToTable("Documents");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.DocumentChunk", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChapterId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ChapterTitle")
@@ -587,6 +589,9 @@ namespace SyrianStudyBot.Migrations
                     b.Property<int?>("PageNumber")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("SectionTitle")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
@@ -596,6 +601,8 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ChapterId");
+
                     b.HasIndex("DocumentId");
 
                     b.HasIndex("Embedding");
@@ -603,7 +610,11 @@ namespace SyrianStudyBot.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
-                    b.ToTable("DocumentChunks", (string)null);
+                    b.HasIndex("PageNumber");
+
+                    b.HasIndex("SectionId");
+
+                    b.ToTable("DocumentChunks");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.Payment", b =>
@@ -667,7 +678,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId", "Status", "CreatedAt");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.QuizResult", b =>
@@ -707,7 +718,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("QuizResults", (string)null);
+                    b.ToTable("QuizResults");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.QuizSession", b =>
@@ -760,7 +771,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("QuizSessions", (string)null);
+                    b.ToTable("QuizSessions");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.RefreshToken", b =>
@@ -809,7 +820,7 @@ namespace SyrianStudyBot.Migrations
 
                     b.HasIndex("UserId", "ExpiresAt", "IsRevoked", "IsReplaced");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -930,13 +941,27 @@ namespace SyrianStudyBot.Migrations
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.DocumentChunk", b =>
                 {
+                    b.HasOne("SyrianStudyBot.Domain.Entities.BookChapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SyrianStudyBot.Domain.Entities.Document", "Document")
                         .WithMany("Chunks")
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("SyrianStudyBot.Domain.Entities.BookSection", "Section")
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Chapter");
+
                     b.Navigation("Document");
+
+                    b.Navigation("Section");
                 });
 
             modelBuilder.Entity("SyrianStudyBot.Domain.Entities.Payment", b =>

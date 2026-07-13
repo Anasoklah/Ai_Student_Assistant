@@ -46,89 +46,89 @@ class StructureExtractor:
                 providers.append(("openrouter", self.openrouter_service.call_with_prompt_and_image))
         return providers
     
-    def extract_structure(self, pdf_path: str, total_pages: int, toc_page: int) -> Optional[DocumentStructure]:
-        """
-        Main entry point. Extract structure from a known TOC page.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            total_pages: Total number of pages in the document
-            toc_page_num: The page number (1-indexed) of the Table of Contents
-        """
-        self.logger.info(f"Extracting structure from TOC page {toc_page}")
-        
-        # Step 1: Try OCR-based extraction first (free, no API cost)
-        structure = self._try_ocr_extraction(pdf_path, toc_page)
-        
+    def extract_structure(self, pdf_path: str, total_pages: int, toc_page: int, toc_page_end: int | None = None) -> Optional[DocumentStructure]:
+        end_page = toc_page_end or toc_page
+        self.logger.info(f"Extracting structure from TOC pages {toc_page}-{end_page}")
+
+        # Step 1: OCR path — concatenate text across the whole range first
+        structure = self._try_ocr_extraction(pdf_path, toc_page, end_page)
         if structure and structure.total_entries >= 2:
             structure.extraction_method = "toc_parser"
             self.logger.info(f"OCR extraction succeeded: {structure.total_entries} entries")
             return structure
-        
-        # Step 2: Fall back to vision-based extraction using providers in priority order
+
+        # Step 2: Vision fallback — call provider per page, merge + dedupe
         self.logger.info("OCR extraction insufficient, falling back to AI vision providers")
-        structure = self._try_vision_extraction(pdf_path, toc_page)
-        
+        structure = self._try_vision_extraction_range(pdf_path, toc_page, end_page)
         if structure and structure.total_entries >= 2:
             structure.extraction_method = "ai_fallback"
-            self.logger.info(f"Vision extraction succeeded with {structure.extraction_method}: {structure.total_entries} entries")
+            self.logger.info(f"Vision extraction succeeded: {structure.total_entries} entries")
             return structure
-        
+
         self.logger.warning("All structure extraction methods failed")
         return None
     
-    def _try_ocr_extraction(self, pdf_path: str, toc_page_num: int) -> Optional[DocumentStructure]:
-        """Extract structure using OCR text + TocParser."""
-        doc = None
+    def _try_ocr_extraction(self, pdf_path: str, toc_page_start: int, toc_page_end: int) -> Optional[DocumentStructure]:
+        """OCR path across a page range. Text is concatenated BEFORE parsing so
+        a chapter header on page N and its lessons on page N+1 are parsed as one block."""
         try:
             import fitz
             doc = fitz.open(pdf_path)
-            
-            if toc_page_num < 1 or toc_page_num > len(doc):
-                self.logger.error(f"TOC page {toc_page_num} is out of range (1-{len(doc)})")
-                return None
-            
-            page = doc.load_page(toc_page_num - 1)
-            text = page.get_text()
-            doc.close()
-            doc = None
-            
-            self.logger.info(f"RAW TEXT FROM TOC PAGE {toc_page_num} ({len(text)} chars): {text[:800]}")
-            
-            # Check if TocParser recognizes this as TOC
-            is_toc = self.toc_parser.is_toc_page(text)
-            self.logger.info(f"TocParser.is_toc_page() returned: {is_toc}")
-            
-            # Parse the TOC text
-            entries = self.toc_parser.parse_toc_page(text)
-            self.logger.info(f"TocParser.parse_toc_page() found {len(entries)} entries")
-            
+            try:
+                if toc_page_start < 1 or toc_page_end > len(doc):
+                    self.logger.error(f"TOC range {toc_page_start}-{toc_page_end} out of bounds (1-{len(doc)})")
+                    return None
+
+                combined_text = ""
+                for page_num in range(toc_page_start, toc_page_end + 1):
+                    page = doc.load_page(page_num - 1)
+                    combined_text += page.get_text() + "\n"
+            finally:
+                doc.close()
+
+            self.logger.info(f"RAW TEXT FROM TOC PAGES {toc_page_start}-{toc_page_end} ({len(combined_text)} chars): {combined_text[:800]}")
+
+            entries = self.toc_parser.parse_toc_page(combined_text)
+            self.logger.info(f"TocParser found {len(entries)} entries across {toc_page_end - toc_page_start + 1} page(s)")
             if not entries:
-                self.logger.warning("TocParser found 0 entries - page may not be a Table of Contents")
                 return None
-            
-            # Classify entries as chapters vs sections
+
             entries = self.toc_parser.identify_chapters_and_sections(entries)
-            
-            # Build the DocumentStructure
             chapters = [e for e in entries if e.level == "Chapter"]
             sections = [e for e in entries if e.level == "Section"]
-            
-            self.logger.info(f"Classified: {len(chapters)} chapters, {len(sections)} sections")
-            
+
             return DocumentStructure(
-                chapters=chapters,
-                sections=sections,
-                total_entries=len(entries),
-                extraction_method="toc_parser"
+                chapters=chapters, sections=sections,
+                total_entries=len(entries), extraction_method="toc_parser",
             )
-            
         except Exception as e:
             self.logger.error(f"OCR extraction failed: {e}")
             return None
-        finally:
-            if doc:
-                doc.close()
+     
+    def _try_vision_extraction_range(self, pdf_path: str, toc_page_start: int, toc_page_end: int) -> Optional[DocumentStructure]:
+        """Vision fallback per page (each page is a separate image call), merged + deduped."""
+        all_chapters, all_sections = [], []
+        seen = set()  # (title, page_number) dedupe key
+
+        for page_num in range(toc_page_start, toc_page_end + 1):
+            structure = self._try_vision_extraction(pdf_path, page_num)  # your existing single-page method, unchanged
+            if not structure:
+                continue
+            for entry in structure.chapters + structure.sections:
+                key = (entry.title.strip(), entry.page_number)
+                if key in seen:
+                    continue
+                seen.add(key)
+                (all_chapters if entry.level == "Chapter" else all_sections).append(entry)
+
+        total = len(all_chapters) + len(all_sections)
+        if total == 0:
+            return None
+
+        return DocumentStructure(
+            chapters=all_chapters, sections=all_sections,
+            total_entries=total, extraction_method="ai_fallback",
+        )   
     
     def _try_vision_extraction(self, pdf_path: str, toc_page_num: int) -> Optional[DocumentStructure]:
         """

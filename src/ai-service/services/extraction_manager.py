@@ -8,6 +8,7 @@ from Jobs.JobStore import JobStore
 from models.dto import PageResult , DocumentStructure
 from services.structure_extractor import StructureExtractor
 from services.toc_parser import TocParser
+import time
 
 
 class ExtractionManager:
@@ -27,6 +28,13 @@ class ExtractionManager:
             pdf_service, gemini_service, groq_service, openrouter_service,
             self.toc_parser, logger, config
         )
+        
+        self._last_request_time: dict[str, float] = {}
+        self._min_interval = {
+            "groq": 60 / 15,        # pace to 15 RPM, under the TPM-driven real ceiling
+            "gemini": 60 / 10,      # pace to 10 RPM
+            "openrouter": 60 / 20,  # pace to 20 RPM
+        }
 
     def _assess_text_quality(self, text: str) -> float:
         if not text or len(text) < 20:
@@ -77,6 +85,7 @@ class ExtractionManager:
 
         for provider_name, provider_call in providers:
             for attempt in range(retry_count):
+                self._throttle(provider_name)  
                 try:
                     if not is_vision:
                         result = provider_call(page_num, text)
@@ -113,6 +122,7 @@ class ExtractionManager:
         for provider_name, provider_call in providers:
             for attempt in range(retry_count):
                 try:
+                    self._throttle(provider_name) 
                     result = provider_call(page_number, image_bytes)
 
                     if getattr(result, "success", False) and getattr(result, "concepts", None):
@@ -221,6 +231,7 @@ class ExtractionManager:
     self,
     pdf_path: str,
     toc_page: int,
+    toc_page_end: int | None = None
     ) -> DocumentStructure | None:
         """
         Extract the document structure from the Table of Contents.
@@ -228,18 +239,32 @@ class ExtractionManager:
         """
 
         total_pages = self.pdf_service.count_pages(pdf_path)
+        end_page = toc_page_end or toc_page
 
-        self.logger.info(
-            f"Extracting document structure from TOC page {toc_page}"
-        )
+        self.logger.info(f"Extracting document structure from TOC pages {toc_page}-{end_page}")
 
         structure = self.structure_extractor.extract_structure(
             pdf_path=pdf_path,
             total_pages=total_pages,
             toc_page=toc_page,
+            toc_page_end=end_page,   # NEW
         )
         
         if structure is None:
          self.logger.warning("Structure extraction failed.")
 
         return structure
+    
+    def _throttle(self, provider_key: str):
+        """
+        Sleeps just long enough to keep us under each provider's free-tier
+        RPM ceiling. provider_key looks like 'groq_text' or 'gemini_vision' —
+        we only care about the prefix before the underscore.
+        """
+        base_provider = provider_key.split("_")[0]
+        min_gap = self._min_interval.get(base_provider, 2.0)
+        last = self._last_request_time.get(provider_key, 0)
+        elapsed = time.monotonic() - last
+        if elapsed < min_gap:
+            time.sleep(min_gap - elapsed)
+        self._last_request_time[provider_key] = time.monotonic()

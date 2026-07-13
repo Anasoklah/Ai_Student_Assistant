@@ -1,4 +1,4 @@
-using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Dtos;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Extraction;
@@ -28,5 +28,6 @@ public interface IAiExtractionClient
     Task<StructureExtractionResponse> ExtractBookStructureAsync(
         Stream pdfStream,
         int tocPage,
+        int? tocPageEnd,
         CancellationToken cancellationToken = default);
 }
