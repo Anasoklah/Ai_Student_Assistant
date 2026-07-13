@@ -18,6 +18,11 @@ public interface IDocumentRepository
     // ── Document queries ──
 
     /// <summary>
+    /// Returns a single document by its ID, including its chunks and chapters.
+    /// </summary>
+    Task<Document?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns a paginated list of documents uploaded by a specific user.
     /// Ordered by most recent upload first.
     /// </summary>

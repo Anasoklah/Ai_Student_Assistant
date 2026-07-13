@@ -21,6 +21,15 @@ public class DocumentIngestionController(
         return Ok(document);
     }
 
+    [HttpGet("{id}/status")]
+    [Authorize(Policy = "StudentOnly")]
+    public async Task<ActionResult<DocumentStatusDto>> GetDocumentStatus(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var status = await documentUseCase.GetDocumentStatusAsync(id, cancellationToken);
+        return Ok(status);
+    }
+
     [HttpGet]
     [Authorize(Policy = "StudentOnly")]
     public async Task<ActionResult<PagedResponse<DocumentDto>>> GetApprovedDocuments(

@@ -28,6 +28,22 @@ public class DocumentDto
 
     /// <summary>Category of document (official book, notes, exam, etc.).</summary>
     public DocumentType DocumentType { get; init; }
+
+    /// <summary>Current processing status of the document.</summary>
+    public DocumentStatus Status { get; init; }
+
+    /// <summary>Human-readable message about the processing status (e.g. error details).</summary>
+    public string? StatusMessage { get; init; }
+}
+
+/// <summary>
+/// Lightweight DTO for polling document processing status.
+/// </summary>
+public class DocumentStatusDto
+{
+    public Guid Id { get; init; }
+    public DocumentStatus Status { get; init; }
+    public string? StatusMessage { get; init; }
 }
 
 /// <summary>

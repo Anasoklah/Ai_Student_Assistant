@@ -24,10 +24,18 @@ public class DocumentRepository : IDocumentRepository
 
     // ── Document queries ──
 
+    public async Task<Document?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        return await _db.Documents
+            .Include(d => d.Chunks)
+            .Include(d => d.Chapters)
+            .FirstOrDefaultAsync(d => d.Id == id, ct);
+    }
+
     public async Task<EntityPage<Document>> GetUserDocumentsAsync(Guid userId, int page, int pageSize, CancellationToken ct = default)
     {
         var query = _db.Documents
-            .Where(d => d.UploadedByUserId == userId)
+            .Where(d => d.UploadedByUserId == userId && d.Status == DocumentStatus.Ready)
             .OrderByDescending(d => d.UploadedAt);
 
         return await PaginateAsync(query, page, pageSize, ct);

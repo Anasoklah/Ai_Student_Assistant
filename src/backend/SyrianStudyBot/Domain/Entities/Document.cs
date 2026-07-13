@@ -13,6 +13,12 @@ public class Document
     public string? Language { get; set; }
     public DocumentType DocumentType { get; set; } = DocumentType.OfficialBook;
 
+    // Ingestion pipeline state. New uploads start as Processing; the background
+    // worker flips this to Ready or Failed once extraction + chunking finishes.
+    public DocumentStatus Status { get; set; } = DocumentStatus.Processing;
+    public string? StatusMessage { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+
     // For student uploads
     public Guid? UploadedByUserId { get; set; }
     public ApplicationUser? UploadedByUser { get; set; }

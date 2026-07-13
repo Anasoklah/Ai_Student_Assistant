@@ -40,6 +40,14 @@ public class UploadDocumentRequest
     /// </summary>
     public int? TocPage { get; init; }
 
+    /// <summary>
+    /// Optional last page of the table of contents in the PDF.
+    /// When provided, the AI service extracts document structure (chapters/sections)
+    /// from the range of pages [TocPage, TocPageEnd] to improve retrieval accuracy.
+    /// If TocPageEnd is null, only TocPage is used for structure extraction.
+    /// </summary>
+    public int? TocPageEnd { get; init; }
+
     /// <summary>The uploaded PDF file.</summary>
     public IFormFile File { get; init; } = null!;
 }

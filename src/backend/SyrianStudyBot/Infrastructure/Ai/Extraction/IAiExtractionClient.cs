@@ -28,5 +28,6 @@ public interface IAiExtractionClient
     Task<StructureExtractionResponse> ExtractBookStructureAsync(
         Stream pdfStream,
         int tocPage,
+        int? tocPageEnd,
         CancellationToken cancellationToken = default);
 }

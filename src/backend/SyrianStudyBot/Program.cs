@@ -91,6 +91,7 @@ var app = builder.Build();
 // Seed data
 await ServiceCollectionExtensions.SeedRoles(app.Services);
 await ServiceCollectionExtensions.SeedAdminUser(app.Services);
+await ServiceCollectionExtensions.ReconcileStaleDocuments(app.Services);
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())

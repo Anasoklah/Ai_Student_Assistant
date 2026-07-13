@@ -18,7 +18,7 @@ class GroqService:
     def __init__(self, config, logger):
         self.logger = logger
         self.api_key = getattr(config, "GROQ_API_KEY", None)
-        self.model = getattr(config, "GROQ_MODEL", "llama-3.1-8b")
+        self.model = getattr(config, "GROQ_MODEL", "openai/gpt-oss-120b")
         self.timeout = getattr(config, "GROQ_TIMEOUT_SECONDS", 30)
         self.enabled = bool(self.api_key and self.api_key != "your-groq-api-key-here")
 

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Extensions.Http;
 using SyrianStudyBot.Features.Auth.Services;
@@ -23,12 +24,14 @@ using SyrianStudyBot.Features.Quiz.UseCases;
 using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Infrastructure.Persistence.Repositories;
 using SyrianStudyBot.Domain.Entities;
+using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Infrastructure.Ai.Chat;
 using SyrianStudyBot.Infrastructure.Ai.Embeddings;
 using SyrianStudyBot.Infrastructure.Documents.Pdf;
 using SyrianStudyBot.Infrastructure.Ai.Extraction;
 using SyrianStudyBot.Features.contracts.repositories;
 using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
 
 namespace SyrianStudyBot;
 
@@ -81,7 +84,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentUseCase, PaymentUseCase>();
         services.AddScoped<IQuizUseCase, QuizUseCase>();
         services.AddHttpContextAccessor();
+
+        // Background jobs
         services.AddHostedService<TokenCleanupService>();
+        services.AddSingleton<IDocumentProcessingQueue, DocumentProcessingQueue>();
+        services.AddScoped<IDocumentProcessor, DocumentProcessor>();
+        services.AddHostedService<DocumentProcessingWorker>();
         return services;
     }
 
@@ -276,6 +284,35 @@ public static class ServiceCollectionExtensions
                     logger.LogError("Failed to create admin: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
                 }
             }            
+        }
+    }
+
+    /// <summary>
+    /// On startup, marks any documents stuck in <see cref="DocumentStatus.Processing"/>
+    /// as <see cref="DocumentStatus.Failed"/> because the in-memory job queue was lost
+    /// on restart. Documents uploaded close to a restart boundary can be re-uploaded.
+    /// </summary>
+    public static async Task ReconcileStaleDocuments(IServiceProvider provider)
+    {
+        using var scope = provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        var staleDocs = await db.Documents
+            .Where(d => d.Status == DocumentStatus.Processing)
+            .ToListAsync();
+
+        foreach (var doc in staleDocs)
+        {
+            doc.Status = DocumentStatus.Failed;
+            doc.StatusMessage = "Processing interrupted by server restart. Please re-upload.";
+            doc.ProcessedAt = DateTime.UtcNow;
+        }
+
+        if (staleDocs.Count > 0)
+        {
+            await db.SaveChangesAsync();
+            logger.LogWarning("Marked {Count} stale processing documents as failed", staleDocs.Count);
         }
     }
 }

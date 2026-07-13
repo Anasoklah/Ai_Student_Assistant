@@ -73,13 +73,14 @@ public class ExtractionService(
     public async Task<DocumentStructureResult?> ExtractStructureAsync(
         Stream pdfStream,
         int tocPage,
+        int? tocPageEnd,
         CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Starting AI service structure extraction (TOC page: {TocPage})", tocPage);
 
         try
         {
-            var result = await aiExtractionClient.ExtractBookStructureAsync(pdfStream, tocPage, cancellationToken);
+            var result = await aiExtractionClient.ExtractBookStructureAsync(pdfStream, tocPage, tocPageEnd , cancellationToken);
 
             if (!result.Success || result.Structure is null)
             {

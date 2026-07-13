@@ -16,7 +16,17 @@ public static class DocumentMappers
         GradeLevel = document.GradeLevel,
         SourceName = document.SourceName,
         Language = document.Language,
-        DocumentType = document.DocumentType
+        DocumentType = document.DocumentType,
+        Status = document.Status,
+        StatusMessage = document.StatusMessage
+    };
+
+    // Status-only view for polling
+    public static DocumentStatusDto MapToStatusDto(Document document) => new()
+    {
+        Id = document.Id,
+        Status = document.Status,
+        StatusMessage = document.StatusMessage
     };
 
     // Admin view - inherits all student fields
@@ -29,6 +39,8 @@ public static class DocumentMappers
         SourceName = document.SourceName,
         Language = document.Language,
         DocumentType = document.DocumentType,
+        Status = document.Status,
+        StatusMessage = document.StatusMessage,
         // Admin extras
         Edition = document.Edition,
         FileSizeBytes = document.FileSizeBytes,

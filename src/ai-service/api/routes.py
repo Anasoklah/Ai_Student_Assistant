@@ -200,6 +200,7 @@ async def get_job_result(job_id: str, manager: ExtractionManager = Depends(get_e
 async def extract_book_structure(
     file: UploadFile = File(...),
     toc_page: int = Form(..., ge=1),
+    toc_page_end: int | None = Form(None, ge=1),   
     manager: ExtractionManager = Depends(get_extraction_manager),
 ):
     """
@@ -237,15 +238,16 @@ async def extract_book_structure(
 
         total_pages = manager.pdf_service.count_pages(temp_file_path)
 
-        if toc_page > total_pages:
-            raise HTTPException(
-                status_code=400,
-                detail=f"toc_page ({toc_page}) is out of range. PDF contains {total_pages} pages."
-            )
+        end_page = toc_page_end or toc_page
+        if toc_page > total_pages or end_page > total_pages:
+          raise HTTPException(status_code=400, detail=f"TOC page range ({toc_page}-{end_page}) is out of range. PDF has {total_pages} pages.")
+        if end_page < toc_page:
+         raise HTTPException(status_code=400, detail="toc_page_end cannot be before toc_page.")
 
         structure = manager.extract_book_structure(
             pdf_path=temp_file_path,
             toc_page=toc_page,
+            toc_page_end = end_page
         )
 
         if structure is None:
