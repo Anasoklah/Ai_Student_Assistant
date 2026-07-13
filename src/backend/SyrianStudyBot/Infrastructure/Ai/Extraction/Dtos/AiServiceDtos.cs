@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 

@@ -1,6 +1,11 @@
 using SyrianStudyBot.Domain;
 using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Payments;
+using SyrianStudyBot.Application.Quiz;
+using SyrianStudyBot.Application.Auth;
+using SyrianStudyBot.Application.Common;
 
 namespace SyrianStudyBot.Infrastructure.Common;
 

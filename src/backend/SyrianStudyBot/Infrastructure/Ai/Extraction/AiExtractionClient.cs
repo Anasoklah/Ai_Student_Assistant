@@ -1,6 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using SyrianStudyBot.Features.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Dtos;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Extraction;

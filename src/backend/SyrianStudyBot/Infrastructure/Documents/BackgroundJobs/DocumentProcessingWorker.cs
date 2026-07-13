@@ -1,4 +1,6 @@
-using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Rag;
 
 namespace SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
 

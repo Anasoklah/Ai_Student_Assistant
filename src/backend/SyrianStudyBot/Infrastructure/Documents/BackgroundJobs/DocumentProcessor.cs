@@ -1,10 +1,15 @@
 using Microsoft.Extensions.Logging;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
-using SyrianStudyBot.Features.Documents.Dtos;
-using SyrianStudyBot.Features.Documents.Mappers;
-using SyrianStudyBot.Features.contracts.repositories;
-using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Application.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Mappers;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Payments;
+using SyrianStudyBot.Application.Quiz;
+using SyrianStudyBot.Application.Auth;
+using SyrianStudyBot.Application.Common;
+using SyrianStudyBot.Application.Rag;
 using SyrianStudyBot.Infrastructure.Documents.Validation;
 
 namespace SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;

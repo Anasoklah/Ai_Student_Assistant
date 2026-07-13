@@ -1,3 +1,4 @@
+using SyrianStudyBot.Application.Common;
 using Microsoft.AspNetCore.Identity;
 using SyrianStudyBot.Domain.Entities;
 

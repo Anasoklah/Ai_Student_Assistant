@@ -1,7 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
-using SyrianStudyBot.Features.contracts.repositories;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Payments;
+using SyrianStudyBot.Application.Quiz;
+using SyrianStudyBot.Application.Auth;
+using SyrianStudyBot.Application.Common;
 
 namespace SyrianStudyBot.Infrastructure.Persistence.Repositories;
 

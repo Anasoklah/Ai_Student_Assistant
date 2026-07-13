@@ -1,7 +1,9 @@
 using System.ClientModel;
 using OpenAI;
 using OpenAI.Chat;
-using SyrianStudyBot.Features.contracts.services;
+using SyrianStudyBot.Application.Chat;
+using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Rag;
 
 namespace SyrianStudyBot.Infrastructure.Ai.Chat;
 
