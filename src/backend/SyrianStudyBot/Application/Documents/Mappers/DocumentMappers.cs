@@ -1,7 +1,7 @@
 using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Application.Documents.Dtos;
-using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
+using SyrianStudyBot.Application.Documents.Commands;
+using SyrianStudyBot.Domain.Enums;
 
 namespace SyrianStudyBot.Application.Documents.Mappers;
 
@@ -49,56 +49,32 @@ public static class DocumentMappers
         ChapterCount = document.Chapters.Count // Fixed: Chapters, not Chunks
     };
 
-    public static Document ToEntity(DocumentIngestionCommand command) => new()
+    public static Document MapFromUploadDocumentCommandToEntity
+    (UploadDocumentCommand command , Guid userId) => new()
     {
-        Title = command.Title,
-        Subject = command.Subject,
-        GradeLevel = command.GradeLevel,
-        SourceName = command.SourceName,
-        Edition = command.Edition,
-        Language = command.Language,
-        DocumentType = command.DocumentType,
-        UploadedByUserId = command.UploadedByUserId,
-        FileSizeBytes = command.FileSizeBytes
+            Title = command.Title,
+            Subject = command.Subject,
+            GradeLevel = command.GradeLevel,
+            SourceName = command.SourceName,
+            Edition = command.Edition,
+            Language = command.Language,
+            DocumentType = DocumentType.OfficialBook,
+            UploadedByUserId = userId,
+            FileSizeBytes = command.FileSizeBytes,
+            Status = DocumentStatus.Processing
     };
 
-    public static DocumentIngestionCommand ToIngestionCommand(
-        UploadDocumentRequest request, 
-        IReadOnlyList<ExtractedPageDto> pages,
-        Guid uploadedByUserId,
-        BookStructureDto? structure = null) => new()
-    {
-        Title = request.Title,
-        Subject = request.Subject,
-        GradeLevel = request.GradeLevel,
-        SourceName = request.SourceName,
-        Edition = request.Edition,
-        Language = request.Language,
-        DocumentType = DocumentType.OfficialBook,
-        UploadedByUserId = uploadedByUserId,
-        FileSizeBytes = request.File.Length,
-        Pages = pages,
-        Structure = structure
-    };
+    public static DocumentProcessingRequest CreateDocumentProcessRequest
+    (string tempPath , Document document, UploadDocumentCommand command) 
+    => new(
+            document.Id,
+            tempPath,
+            command.FileName,
+            command.StartPage,
+            command.EndPage,
+            command.TocPage,
+            command.TocPageEnd,
+            document.UploadedByUserId
+    );
 
-    public static BookStructureDto ToBookStructureDto(DocumentStructureResult structure)
-    {
-        return new BookStructureDto
-        {
-            Chapters = structure.Chapters.Select(c => new BookStructureEntryDto
-            {
-                Title = c.Title,
-                PageNumber = c.PageNumber,
-                Level = c.Level,
-                ParentChapter = c.ParentChapter
-            }).ToList(),
-            Sections = structure.Sections.Select(s => new BookStructureEntryDto
-            {
-                Title = s.Title,
-                PageNumber = s.PageNumber,
-                Level = s.Level,
-                ParentChapter = s.ParentChapter
-            }).ToList()
-        };
-    }
 }

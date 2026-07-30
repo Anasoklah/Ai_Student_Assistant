@@ -29,6 +29,9 @@ class PageResult(BaseModel):
     error_message: Optional[str] = None
     extraction_service: Optional[str] = None
     text_quality_score: Optional[float] = None
+    # True when the stored result is a best-effort fallback that failed quality
+    # validation (kept rather than dropped). Downstream can choose to re-review.
+    needs_review: bool = False
 
 
 
@@ -67,6 +70,7 @@ class ImageExtractionResponse(BaseModel):
     concepts: List[ExtractedConcept] = Field(default_factory=list)
     error_message: Optional[str] = None
     extraction_service: Optional[str] = None
+    needs_review: bool = False
 
 
     # Add this new class alongside your existing DTOs

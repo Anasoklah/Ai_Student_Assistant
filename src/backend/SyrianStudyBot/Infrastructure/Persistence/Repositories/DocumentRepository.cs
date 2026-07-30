@@ -70,7 +70,7 @@ public class DocumentRepository : IDocumentRepository
 
     // ── Book structure commands ──
 
-    public async Task<Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>>?
+    public async Task<Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>?>
         SaveBookStructureAsync(Guid documentId, BookStructureDto structure, CancellationToken ct = default)
     {
         if (structure is null || structure.Chapters.Count == 0)

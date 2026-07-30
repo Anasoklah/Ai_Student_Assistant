@@ -3,10 +3,11 @@ using SyrianStudyBot.Application.Documents.Dtos;
 
 namespace SyrianStudyBot.Application.Documents;
 
-public interface IDocumentIngestionService
+/// <summary>
+/// Converts extracted content into searchable chunks and embeddings.
+/// </summary>
+public interface IDocumentContentIngestionService
 {
-    Task<Document> IngestAsync(DocumentIngestionCommand requestDto, CancellationToken cancellationToken = default);
-
     Task AttachExtractedContentAsync(
         Document document,
         IReadOnlyList<ExtractedPageDto> pages,

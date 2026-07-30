@@ -1,9 +1,3 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Polly;
-using Polly.Extensions.Http;
 using SyrianStudyBot.Application.Auth;
 using SyrianStudyBot.Application.Auth.Options;
 using SyrianStudyBot.Application.Chat;
@@ -13,25 +7,18 @@ using SyrianStudyBot.Application.Payments;
 using SyrianStudyBot.Application.Profile;
 using SyrianStudyBot.Application.Quiz;
 using SyrianStudyBot.Application.Rag;
-using SyrianStudyBot.Domain.Entities;
-using SyrianStudyBot.Domain.Enums;
-using SyrianStudyBot.Infrastructure.Ai.Chat;
+using SyrianStudyBot.Application.Documents.Configuration;
+using SyrianStudyBot.Application.Documents.Validation;
 using SyrianStudyBot.Infrastructure.Ai.Embeddings;
-using SyrianStudyBot.Infrastructure.Ai.Extraction;
 using SyrianStudyBot.Infrastructure.Ai.Rag;
 using SyrianStudyBot.Infrastructure.Ai.VectorSearch;
 using SyrianStudyBot.Infrastructure.Auth;
 using SyrianStudyBot.Infrastructure.Auth.BackgroundJobs;
 using SyrianStudyBot.Infrastructure.Common;
-using SyrianStudyBot.Infrastructure.Documents;
 using SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
-using SyrianStudyBot.Infrastructure.Documents.Pdf;
-using SyrianStudyBot.Infrastructure.Documents.Validation;
 using SyrianStudyBot.Infrastructure.Identity;
-using SyrianStudyBot.Infrastructure.Persistence;
 using SyrianStudyBot.Infrastructure.Persistence.Repositories;
-using System.Text;
-using System.Text.Json;
+
 
 namespace SyrianStudyBot;
 
@@ -45,7 +32,7 @@ public static class ApplicationServices
     {
         services.AddScoped<IUserContextService, UserContextService>();
         services.AddScoped<IUsageTrackingService, UsageTrackingService>();
-        services.AddScoped<IDocumentIngestionValidator, DocumentIngestionValidator>();
+        services.AddScoped<IDocumentValidator, DocumentValidator>();
         return services;
     }
 
@@ -73,13 +60,13 @@ public static class ApplicationServices
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
         // ── Application services (business logic, uses repositories) ──
-        services.AddScoped<IDocumentIngestionService, DocumentIngestionService>();
+        services.AddScoped<IDocumentContentIngestionService, DocumentContentIngestionService>();
         services.AddScoped<IVectorSearchService, VectorSearchService>();
 
         // ── UseCases (orchestration layer) ──
         services.AddScoped<IAuthUseCase, AuthUseCase>();
         services.AddScoped<IChatUseCase, ChatUseCase>();
-        services.AddScoped<IDocumentUseCase, DocumentUseCase>();
+        services.AddScoped<IDocumentUploadAndQueryUseCase, DocumentUploadAndQueryUseCase>();
         services.AddScoped<IProfileUseCase, ProfileUseCase>();
         services.AddScoped<IPaymentUseCase, PaymentUseCase>();
         services.AddScoped<IQuizUseCase, QuizUseCase>();
@@ -87,8 +74,10 @@ public static class ApplicationServices
 
         // Background jobs
         services.AddHostedService<TokenCleanupService>();
-        services.AddSingleton<IDocumentProcessingQueue, DocumentProcessingQueue>();
-        services.AddScoped<IDocumentProcessor, DocumentProcessor>();
+        services.AddSingleton<InMemoryDocumentProcessingJobQueue>();
+        services.AddSingleton<IDocumentProcessingJobQueue>(sp =>
+            sp.GetRequiredService<InMemoryDocumentProcessingJobQueue>());
+        services.AddScoped<DocumentBackgroundProcessor>();
         services.AddHostedService<DocumentProcessingWorker>();
         return services;
     }

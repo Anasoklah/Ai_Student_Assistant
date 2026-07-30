@@ -3,37 +3,34 @@ using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Domain.Exceptions;
 using SyrianStudyBot.Application.Documents.Dtos;
 using SyrianStudyBot.Application.Documents.Mappers;
-using SyrianStudyBot.Application.Chat;
-using SyrianStudyBot.Application.Documents;
-using SyrianStudyBot.Application.Payments;
-using SyrianStudyBot.Application.Quiz;
-using SyrianStudyBot.Application.Auth;
 using SyrianStudyBot.Application.Common;
-using SyrianStudyBot.Application.Rag;
-using SyrianStudyBot.Infrastructure.Documents;
-using SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
-using SyrianStudyBot.Infrastructure.Documents.Validation;
-using SyrianStudyBot.Infrastructure.Identity;
+using SyrianStudyBot.Application.Documents.Configuration;
+using SyrianStudyBot.Application.Documents.Validation;
+using SyrianStudyBot.Application.Documents.Commands;
 using Microsoft.Extensions.Options;
 
 namespace SyrianStudyBot.Application.Documents;
 
-public class DocumentUseCase : IDocumentUseCase
+/// <summary>
+/// Handles the API-facing document actions: upload, status, and lists.
+/// Long-running extraction is delegated to the background processing queue.
+/// </summary>
+public class DocumentUploadAndQueryUseCase : IDocumentUploadAndQueryUseCase
 {
     private readonly IDocumentRepository _docRepo;
     private readonly IUserContextService _userContext;
-    private readonly IDocumentIngestionValidator _documentValidator;
-    private readonly IDocumentProcessingQueue _processingQueue;
+    private readonly IDocumentValidator _documentValidator;
+    private readonly IDocumentProcessingJobQueue _processingQueue;
     private readonly DocumentUploadOptions _uploadOptions;
-    private readonly ILogger<DocumentUseCase> _logger;
+    private readonly ILogger<DocumentUploadAndQueryUseCase> _logger;
 
-    public DocumentUseCase(
+    public DocumentUploadAndQueryUseCase(
         IDocumentRepository docRepo,
-        IDocumentIngestionValidator documentValidator,
+        IDocumentValidator documentValidator,
         IUserContextService userContext,
-        IDocumentProcessingQueue processingQueue,
+        IDocumentProcessingJobQueue processingQueue,
         IOptions<DocumentUploadOptions> uploadOptions,
-        ILogger<DocumentUseCase> logger)
+        ILogger<DocumentUploadAndQueryUseCase> logger)
     {
         _docRepo = docRepo;
         _userContext = userContext;
@@ -43,55 +40,42 @@ public class DocumentUseCase : IDocumentUseCase
         _logger = logger;
     }
 
-    public async Task<DocumentDto> IngestUploadedDocumentAsync(UploadDocumentRequest request, CancellationToken cancellationToken = default)
+    public async Task<DocumentDto> UploadAsync(UploadDocumentCommand command, CancellationToken cancellationToken = default)
     {
-        var validationError = _documentValidator.ValidateFileUploadRequest(request, _uploadOptions.MaxAdminFileSizeBytes);
+        var validationError = _documentValidator.ValidateUpload(command, _uploadOptions.MaxAdminFileSizeBytes);
         if (validationError is not null)
             throw new BadRequestException(validationError);
 
         var userId = _userContext.GetCurrentUserId();
-        var ext = Path.GetExtension(request.File.FileName);
+        var ext = Path.GetExtension(command.FileName);
 
-        var document = new Document
-        {
-            Title = request.Title,
-            Subject = request.Subject,
-            GradeLevel = request.GradeLevel,
-            SourceName = request.SourceName,
-            Edition = request.Edition,
-            Language = request.Language,
-            DocumentType = DocumentType.OfficialBook,
-            UploadedByUserId = userId,
-            FileSizeBytes = request.File.Length,
-            Status = DocumentStatus.Processing
-        };
+
+        // create a new document and save it in the database 
+        var document = DocumentMappers
+        .MapFromUploadDocumentCommandToEntity(command,userId);
 
         _docRepo.Add(document);
         await _docRepo.SaveChangesAsync(cancellationToken);
 
+        // create a temp file in temp path to work with it temporary
         var tempDir = Path.Combine(Path.GetTempPath(), "ssb-uploads");
         Directory.CreateDirectory(tempDir);
         var tempPath = Path.Combine(tempDir, $"{document.Id}{ext}");
 
         await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write))
         {
-            await request.File.CopyToAsync(fileStream, cancellationToken);
+            await command.FileContent.CopyToAsync(fileStream, cancellationToken);
         }
 
-        var job = new DocumentProcessingJob(
-            DocumentId: document.Id,
-            TempFilePath: tempPath,
-            FileName: request.File.FileName,
-            StartPage: request.StartPage,
-            EndPage: request.EndPage,
-            TocPage: request.TocPage,
-            TocPageEnd: request.TocPageEnd,
-            UploadedByUserId: userId
-        );
+        // create a new Document Process Request to put it in the channel Queue
+        var processingRequest = DocumentMappers
+        .CreateDocumentProcessRequest(tempPath , document , command);
 
-        await _processingQueue.EnqueueAsync(job, cancellationToken);
-        _logger.LogInformation("Enqueued processing job for document {Id}", document.Id);
+        // sent request to the Queue ... let background job complete the process 
+        await _processingQueue.EnqueueAsync(processingRequest, cancellationToken);
+        _logger.LogInformation("Queued background processing for document {Id}", document.Id);
 
+        
         return DocumentMappers.MapToStudentDto(document);
     }
 

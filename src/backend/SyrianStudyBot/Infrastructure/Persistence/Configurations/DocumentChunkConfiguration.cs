@@ -14,6 +14,7 @@ public class DocumentChunkConfiguration : IEntityTypeConfiguration<DocumentChunk
         builder.HasIndex(e => e.ChapterId);
         builder.HasIndex(e => e.SectionId);
         builder.HasIndex(e => e.PageNumber);
+        builder.HasIndex(e => e.NeedsReview);
 
         // pgvector index for fast similarity search
         builder.HasIndex(e => e.Embedding)
@@ -23,6 +24,7 @@ public class DocumentChunkConfiguration : IEntityTypeConfiguration<DocumentChunk
         builder.Property(e => e.ChapterTitle).HasMaxLength(300);
         builder.Property(e => e.SectionTitle).HasMaxLength(300);
         builder.Property(e => e.Content).HasMaxLength(10000);
+        builder.Property(e => e.NeedsReview).HasDefaultValue(false);
         builder.Property(e => e.Embedding).HasColumnType("vector(768)"); // nomic-embed-text dimension
 
         builder.HasOne(e => e.Document)

@@ -30,9 +30,28 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      PROVIDER_PRIORITY: ${PROVIDER_PRIORITY:-gemini,groq,openrouter}
+      PROVIDER_PRIORITY: ${PROVIDER_PRIORITY:-opencode,gemini,groq,openrouter}
       PROVIDER_RETRY_COUNT: ${PROVIDER_RETRY_COUNT:-1}
-      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-52428800}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-524288000}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      OPENCODE_TIMEOUT_SECONDS: ${OPENCODE_TIMEOUT_SECONDS:-60}
+      # Optional; blank = use the code defaults in OpenCodeService.
+      # Images are only ever sent to OPENCODE_VISION_MODELS.
+      OPENCODE_TEXT_MODELS: ${OPENCODE_TEXT_MODELS:-}
+      OPENCODE_VISION_MODELS: ${OPENCODE_VISION_MODELS:-}
+      # Per-provider model + tuning. Defaults live in Config.py; override here or in .env.
+      # NOTE: mixtral-8x7b is decommissioned on Groq — do not use it.
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_VISION_MODEL: ${GROQ_VISION_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen-2.5-72b-instruct}
+      OPENROUTER_MODEL_FALLBACKS: ${OPENROUTER_MODEL_FALLBACKS:-}
+      OPENROUTER_VISION_MODEL: ${OPENROUTER_VISION_MODEL:-google/gemini-2.0-flash-001}
+      OPENROUTER_VISION_MODEL_FALLBACKS: ${OPENROUTER_VISION_MODEL_FALLBACKS:-}
+      GROQ_STRUCTURED_OUTPUT: ${GROQ_STRUCTURED_OUTPUT:-true}
+      OPENROUTER_STRUCTURED_OUTPUT: ${OPENROUTER_STRUCTURED_OUTPUT:-true}
+      KEYWORDS_MIN: ${KEYWORDS_MIN:-3}
+      KEYWORDS_MAX: ${KEYWORDS_MAX:-7}
     ports:
       - "8000:8000"
     healthcheck:
@@ -57,7 +76,7 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=studybot_phase3;Username=postgres;Password=${DB_PASSWORD:-dev_password}
       AiService__BaseUrl: http://ai-service:8000
       AiService__PollingIntervalSeconds: ${AiService__PollingIntervalSeconds:-5}
-      AiService__TimeoutMinutes: ${AiService__TimeoutMinutes:-180}
+      AiService__TimeoutMinutes: ${AiService__TimeoutMinutes:-500}
       AiService__Enabled: ${AiService__Enabled:-false}
       Jwt__Secret: ${Jwt__Secret:-}
       Jwt__Issuer: ${Jwt__Issuer:-YourApp}

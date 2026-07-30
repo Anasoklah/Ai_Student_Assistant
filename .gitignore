@@ -60,3 +60,5 @@ htmlcov/
 .yarn/
 .pip/
 ```
+# Track the env template (negation must come after .env.* rule)
+!.env.example

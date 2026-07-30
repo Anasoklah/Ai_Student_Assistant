@@ -6,12 +6,12 @@ namespace SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
 
 public class DocumentProcessingWorker : BackgroundService
 {
-    private readonly IDocumentProcessingQueue _queue;
+    private readonly InMemoryDocumentProcessingJobQueue _queue;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DocumentProcessingWorker> _logger;
 
     public DocumentProcessingWorker(
-        IDocumentProcessingQueue queue,
+        InMemoryDocumentProcessingJobQueue queue,
         IServiceProvider serviceProvider,
         ILogger<DocumentProcessingWorker> logger)
     {
@@ -24,19 +24,19 @@ public class DocumentProcessingWorker : BackgroundService
     {
         _logger.LogInformation("Document processing worker started");
 
-        await foreach (var job in _queue.DequeueAllAsync(stoppingToken))
+        await foreach (var request in _queue.ReadAllAsync(stoppingToken))
         {
-            _logger.LogInformation("Processing document {Id}: {FileName}", job.DocumentId, job.FileName);
+            _logger.LogInformation("Processing document {Id}: {FileName}", request.DocumentId, request.FileName);
 
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var processor = scope.ServiceProvider.GetRequiredService<IDocumentProcessor>();
-                await processor.ProcessAsync(job, stoppingToken);
+                var processor = scope.ServiceProvider.GetRequiredService<DocumentBackgroundProcessor>();
+                await processor.ProcessAsync(request, stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled error processing document {Id}", job.DocumentId);
+                _logger.LogError(ex, "Unhandled error processing document {Id}", request.DocumentId);
             }
         }
 

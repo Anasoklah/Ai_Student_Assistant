@@ -586,6 +586,11 @@ namespace SyrianStudyBot.Migrations
                     b.Property<int>("EndWord")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("NeedsReview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int?>("PageNumber")
                         .HasColumnType("integer");
 
@@ -609,6 +614,8 @@ namespace SyrianStudyBot.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
+
+                    b.HasIndex("NeedsReview");
 
                     b.HasIndex("PageNumber");
 

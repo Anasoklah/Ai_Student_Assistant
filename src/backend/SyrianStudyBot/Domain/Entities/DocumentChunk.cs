@@ -18,6 +18,14 @@ public class DocumentChunk
     public Vector Embedding { get; set; } = null!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// True when the source page did not pass the AI service's deterministic
+    /// quality validation and was stored as a best-effort result. Such chunks
+    /// are still indexed and searchable, but flagged so they can be reviewed or
+    /// filtered. Defaults to false (validated / accepted).
+    /// </summary>
+    public bool NeedsReview { get; set; }
+
     public Document Document { get; set; } = null!;
 
     // FK to book structure for exact GUID-based filtering

@@ -1,22 +1,25 @@
 using SyrianStudyBot.Application.Documents.Dtos;
-using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
 
 namespace SyrianStudyBot.Application.Documents;
 
-public interface IExtractionService
+/// <summary>
+/// Extracts educational content from an uploaded document.
+/// Infrastructure provides the AI-backed implementation.
+/// </summary>
+public interface IDocumentContentExtractor
 {
-    Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
+    Task<IReadOnlyList<ExtractedPageDto>> ExtractPdfAsync(
         Stream pdfStream,
         int? startPage,
         int? endPage,
         CancellationToken cancellationToken = default);
 
-    Task<ImageExtractionResponse> ExtractImageAsync(
+    Task<ExtractedImageContent> ExtractImageAsync(
         Stream imageStream,
         string fileName,
         CancellationToken cancellationToken = default);
 
-    Task<DocumentStructureResult?> ExtractStructureAsync(
+    Task<BookStructureDto?> ExtractBookStructureAsync(
         Stream pdfStream,
         int tocPage,
         int? tocPageEnd,

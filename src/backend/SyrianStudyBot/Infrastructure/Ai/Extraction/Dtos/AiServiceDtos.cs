@@ -47,7 +47,8 @@ public record PageResult(
     [property: JsonPropertyName("concepts")] List<ExtractedConcept> Concepts,
     [property: JsonPropertyName("error_message")] string? ErrorMessage,
     [property: JsonPropertyName("extraction_service")] string? ExtractionService,
-    [property: JsonPropertyName("text_quality_score")] double? TextQualityScore
+    [property: JsonPropertyName("text_quality_score")] double? TextQualityScore,
+    [property: JsonPropertyName("needs_review")] bool NeedsReview = false
 );
 
 /// <summary>
@@ -69,7 +70,8 @@ public record ImageExtractionResponse(
     [property: JsonPropertyName("page_number")] int PageNumber,
     [property: JsonPropertyName("concepts")] List<ExtractedConcept> Concepts,
     [property: JsonPropertyName("error_message")] string? ErrorMessage,
-    [property: JsonPropertyName("extraction_service")] string? ExtractionService
+    [property: JsonPropertyName("extraction_service")] string? ExtractionService,
+    [property: JsonPropertyName("needs_review")] bool NeedsReview = false
 );
 
 /// <summary>

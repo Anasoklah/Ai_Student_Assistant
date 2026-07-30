@@ -1,23 +1,43 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SyrianStudyBot.Api.Contracts.Documents;
 using SyrianStudyBot.Application.Documents;
+using SyrianStudyBot.Application.Documents.Commands;
 using SyrianStudyBot.Application.Documents.Dtos;
 
 namespace SyrianStudyBot.Api.Controllers;
 
 [ApiController]
-[RequestFormLimits(MultipartBodyLengthLimit = 200L * 1024 * 1024)]
-[RequestSizeLimit(200L * 1024 * 1024)]
+[RequestFormLimits(MultipartBodyLengthLimit = 500L * 1024 * 1024)]
+[RequestSizeLimit(500L * 1024 * 1024)]
 [Route("api/documents")]
 public class DocumentIngestionController(
-    IDocumentUseCase documentUseCase) : ControllerBase
+    IDocumentUploadAndQueryUseCase documentUseCase) : ControllerBase
 {
     [HttpPost("upload")]
     [Authorize(Policy = "AdminOnly")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadAdminDocumentFile([FromForm] UploadDocumentRequest request, CancellationToken cancellationToken)
     {
-        var document = await documentUseCase.IngestUploadedDocumentAsync(request, cancellationToken);
+        await using var fileContent = request.File.OpenReadStream();
+        var command = new UploadDocumentCommand
+        {
+            Title = request.Title,
+            Subject = request.Subject,
+            GradeLevel = request.GradeLevel,
+            SourceName = request.SourceName,
+            Edition = request.Edition,
+            Language = request.Language,
+            StartPage = request.StartPage,
+            EndPage = request.EndPage,
+            TocPage = request.TocPage,
+            TocPageEnd = request.TocPageEnd,
+            FileName = request.File.FileName,
+            FileSizeBytes = request.File.Length,
+            FileContent = fileContent
+        };
+
+        var document = await documentUseCase.UploadAsync(command, cancellationToken);
         return Ok(document);
     }
 

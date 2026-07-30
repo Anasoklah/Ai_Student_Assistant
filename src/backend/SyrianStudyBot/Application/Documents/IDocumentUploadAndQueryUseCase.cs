@@ -1,10 +1,11 @@
 using SyrianStudyBot.Application.Documents.Dtos;
+using SyrianStudyBot.Application.Documents.Commands;
 
 namespace SyrianStudyBot.Application.Documents;
 
-public interface IDocumentUseCase
+public interface IDocumentUploadAndQueryUseCase
 {
-    Task<DocumentDto> IngestUploadedDocumentAsync(UploadDocumentRequest request, CancellationToken cancellationToken = default);
+    Task<DocumentDto> UploadAsync(UploadDocumentCommand command, CancellationToken cancellationToken = default);
     Task<DocumentStatusDto> GetDocumentStatusAsync(Guid id, CancellationToken cancellationToken = default);
     Task<PagedResponse<DocumentDto>> GetMyDocumentsAsync(
     int page, int pageSize, CancellationToken cancellationToken = default);

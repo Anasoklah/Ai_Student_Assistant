@@ -2,11 +2,13 @@ import logging
 import sys
 from fastapi import FastAPI
 from api.routes import router as extraction_router
+from api.routes_test import router as test_router
 from Config import Config
 from services.pdf_slice_service import PdfSliceService
 from services.gemini_service import GeminiService
 from services.groq_service import GroqService
 from services.openrouter_service import OpenRouterService
+from services.opencode_service import OpenCodeService
 from Jobs.JobStore import JobStore
 from services.extraction_manager import ExtractionManager
 
@@ -30,11 +32,12 @@ pdf_service = PdfSliceService(logger)
 gemini_service = GeminiService(config, logger)
 groq_service = GroqService(config, logger)
 openrouter_service = OpenRouterService(config, logger)
+opencode_service = OpenCodeService(config, logger)
 job_store = JobStore()
 
 extraction_manager = ExtractionManager(
-    pdf_service, gemini_service, groq_service, openrouter_service, 
-    job_store, logger, config
+    pdf_service, gemini_service, groq_service, openrouter_service,
+    job_store, logger, config, opencode_service=opencode_service
 )
 
 app = FastAPI(
@@ -44,6 +47,7 @@ app = FastAPI(
 )
 
 app.include_router(extraction_router)
+app.include_router(test_router)
 
 
 @app.get("/health", tags=["Infrastructure"])

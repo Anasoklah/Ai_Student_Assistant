@@ -62,7 +62,7 @@ public interface IDocumentRepository
     /// Dictionary mapping page_number → (ChapterId, SectionId, ChapterTitle, SectionTitle).
     /// Returns null if structure is null or empty.
     /// </returns>
-    Task<Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>>?
+    Task<Dictionary<int, (Guid ChapterId, Guid? SectionId, string ChapterTitle, string? SectionTitle)>?>
         SaveBookStructureAsync(Guid documentId, BookStructureDto structure, CancellationToken ct = default);
 
     // ── Vector search ──

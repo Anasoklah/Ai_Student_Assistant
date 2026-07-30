@@ -40,7 +40,6 @@ public class OllamaEmbeddingService : IEmbeddingService
             IEnumerable<string> texts, CancellationToken cancellationToken = default)
         {
             var inputList = texts.ToList();
-            const int batchSize = 10;
             const int maxConcurrency = 3;
 
             var results = new float[inputList.Count][];

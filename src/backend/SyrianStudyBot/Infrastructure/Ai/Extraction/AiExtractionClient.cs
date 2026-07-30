@@ -39,10 +39,10 @@ public class AiExtractionClient : IAiExtractionClient
         
         formData.Add(new StringContent(bookId), "book_id");
         if(startPage.HasValue)
-           formData.Add(new StringContent(startPage.ToString()), "start_page");
+           formData.Add(new StringContent(startPage.Value.ToString()), "page_start");
 
         if(endPage.HasValue)
-           formData.Add(new StringContent(endPage.ToString()), "end_page");
+           formData.Add(new StringContent(endPage.Value.ToString()), "page_end");
 
         var response = await _httpClient.PostAsync("/api/v1/extraction/extract-pdf-async", formData, cancellationToken);
         
@@ -156,7 +156,7 @@ public class AiExtractionClient : IAiExtractionClient
         formData.Add(fileContent, "file", "document.pdf");
 
         formData.Add(new StringContent(tocPage.ToString()), "toc_page");
-        formData.Add(new StringContent(tocPageEnd.ToString()), "toc_page_end");
+        formData.Add(new StringContent(tocPageEnd.ToString()!), "toc_page_end");
         var response = await _httpClient.PostAsync("/api/v1/extraction/extract-book-structure", formData, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -198,6 +198,7 @@ public class AiExtractionClient : IAiExtractionClient
                     {
                         PageNumber = p.PageNumber,
                         Text = FormatConceptsAsText(p.Concepts),
+                        NeedsReview = p.NeedsReview,
                         Concepts = p.Concepts.Select(c => new ExtractedConceptDto
                         {
                             Title = c.Title,

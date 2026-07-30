@@ -1,48 +1,20 @@
 using Pgvector;
-using SyrianStudyBot.Application.Documents.Mappers;
 using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Application.Documents.Dtos;
-using SyrianStudyBot.Application.Chat;
-using SyrianStudyBot.Application.Documents;
-using SyrianStudyBot.Application.Payments;
-using SyrianStudyBot.Application.Quiz;
-using SyrianStudyBot.Application.Auth;
-using SyrianStudyBot.Application.Common;
 using SyrianStudyBot.Application.Rag;
 
-namespace SyrianStudyBot.Infrastructure.Documents;
+namespace SyrianStudyBot.Application.Documents;
 
 /// <summary>
-/// Handles document ingestion: builds text chunks from extracted pages,
-/// generates embeddings, and persists everything via IDocumentRepository.
-/// 
-/// This service contains BUSINESS LOGIC only (chunking).
-/// All database operations go through IDocumentRepository.
+/// Builds chunks from extracted content, generates embeddings, and persists the result.
 /// </summary>
-public class DocumentIngestionService(
+public class DocumentContentIngestionService(
     IDocumentRepository docRepo,
     IEmbeddingService embeddingService,
-    ILogger<DocumentIngestionService> logger) : IDocumentIngestionService
+    ILogger<DocumentContentIngestionService> logger) : IDocumentContentIngestionService
 {
     private const int ChunkSize = 150;
     private const int ChunkOverlap = 20;
-
-    public async Task<Document> IngestAsync(DocumentIngestionCommand requestDto, CancellationToken cancellationToken = default)
-    {
-        logger.LogInformation("Starting ingestion for document '{Title}' (subject: {Subject})", requestDto.Title, requestDto.Subject);
-
-        var document = DocumentMappers.ToEntity(requestDto);
-
-        docRepo.Add(document);
-        await docRepo.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Saved document '{Title}' with ID {DocumentId}", document.Title, document.Id);
-
-        await AttachExtractedContentAsync(document, requestDto.Pages, requestDto.Structure, cancellationToken);
-        await docRepo.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("Saved document '{Title}' with {ChunkCount} chunks to database", document.Title, document.Chunks.Count);
-        return document;
-    }
 
     public async Task AttachExtractedContentAsync(
         Document document,
@@ -54,7 +26,7 @@ public class DocumentIngestionService(
         if (structure is { Chapters.Count: > 0 })
         {
             pageLookup = await docRepo.SaveBookStructureAsync(document.Id, structure, cancellationToken);
-            logger.LogInformation("Saved book structure with {Count} chapters", structure.Chapters.Count);
+            logger.LogInformation("Saved book structure with {Count} chapters", structure!.Chapters.Count);
         }
 
         var chunks = BuildChunksFromExtractionResults(pages);
@@ -76,6 +48,7 @@ public class DocumentIngestionService(
                 StartWord = chunks[i].StartWord,
                 EndWord = chunks[i].EndWord,
                 Content = chunks[i].Text,
+                NeedsReview = chunks[i].NeedsReview,
                 Embedding = new Vector(embeddings[i])
             };
 
@@ -109,12 +82,12 @@ public class DocumentIngestionService(
                     continue;
 
                 hasConceptChunks = true;
-                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, content));
+                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, content, page.NeedsReview));
             }
 
             if (!hasConceptChunks && !string.IsNullOrWhiteSpace(page.Text))
             {
-                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, page.Text));
+                chunks.AddRange(SplitTextIntoChunks(page.PageNumber, null, null, page.Text, page.NeedsReview));
             }
         }
 
@@ -127,9 +100,10 @@ public class DocumentIngestionService(
         string? SectionTitle,
         string Text,
         int StartWord,
-        int EndWord);
+        int EndWord,
+        bool NeedsReview);
 
-    private static List<SegmentChunk> SplitTextIntoChunks(int pageNumber, string? chapterTitle, string? sectionTitle, string content)
+    private static List<SegmentChunk> SplitTextIntoChunks(int pageNumber, string? chapterTitle, string? sectionTitle, string content, bool needsReview)
     {
         var chunks = new List<SegmentChunk>();
         var words = content.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -146,7 +120,8 @@ public class DocumentIngestionService(
                 sectionTitle,
                 chunkText,
                 start,
-                end - 1));
+                end - 1,
+                needsReview));
             start += step;
         }
 

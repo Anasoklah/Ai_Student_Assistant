@@ -1,21 +1,19 @@
 using SyrianStudyBot.Application.Documents.Dtos;
 using SyrianStudyBot.Infrastructure.Ai.Extraction;
 using SyrianStudyBot.Infrastructure.Ai.Extraction.Dtos;
-using SyrianStudyBot.Application.Chat;
 using SyrianStudyBot.Application.Documents;
-using SyrianStudyBot.Application.Rag;
 
-namespace SyrianStudyBot.Infrastructure.Documents.Pdf;
+namespace SyrianStudyBot.Infrastructure.Documents.Extraction;
 
 /// <summary>
-/// Implementation of IPdfTextExtractorService that delegates PDF extraction to the external AI service.
-/// This service submits the PDF to the AI service, polls for completion, and returns the extracted pages.
+/// AI-backed implementation of the document extraction port.
+/// It translates provider DTOs into Application DTOs.
 /// </summary>
-public class ExtractionService(
+public class AiDocumentContentExtractor(
     IAiExtractionClient aiExtractionClient,
-    ILogger<ExtractionService> logger) : IExtractionService
+    ILogger<AiDocumentContentExtractor> logger) : IDocumentContentExtractor
 {
-    public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPagesAsync(
+    public async Task<IReadOnlyList<ExtractedPageDto>> ExtractPdfAsync(
         Stream pdfStream,
         int? startPage,
         int? endPage,
@@ -51,7 +49,7 @@ public class ExtractionService(
         }
     }
 
-    public async Task<ImageExtractionResponse> ExtractImageAsync(
+    public async Task<ExtractedImageContent> ExtractImageAsync(
         Stream imageStream,
         string fileName,
         CancellationToken cancellationToken = default)
@@ -63,7 +61,15 @@ public class ExtractionService(
             var result = await aiExtractionClient.ExtractImageAsync(imageStream, fileName, cancellationToken);
             logger.LogInformation("Image extraction completed: {FileName}, Success: {Success}, Concepts: {Count}",
                 fileName, result.Success, result.Concepts?.Count ?? 0);
-            return result;
+            return new ExtractedImageContent(
+                result.PageNumber,
+                (result.Concepts ?? []).Select(concept => new ExtractedConceptDto
+                {
+                    Title = concept.Title,
+                    Content = concept.Content,
+                    Keywords = concept.Keywords
+                }).ToList(),
+                result.NeedsReview);
         }
         catch (Exception ex)
         {
@@ -72,7 +78,7 @@ public class ExtractionService(
         }
     }
 
-    public async Task<DocumentStructureResult?> ExtractStructureAsync(
+    public async Task<BookStructureDto?> ExtractBookStructureAsync(
         Stream pdfStream,
         int tocPage,
         int? tocPageEnd,
@@ -92,7 +98,23 @@ public class ExtractionService(
 
             logger.LogInformation("Structure extraction completed: {Entries} entries (method: {Method})",
                 result.Structure.TotalEntries, result.Structure.ExtractionMethod);
-            return result.Structure;
+            return new BookStructureDto
+            {
+                Chapters = result.Structure.Chapters.Select(entry => new BookStructureEntryDto
+                {
+                    Title = entry.Title,
+                    PageNumber = entry.PageNumber,
+                    Level = entry.Level,
+                    ParentChapter = entry.ParentChapter
+                }).ToList(),
+                Sections = result.Structure.Sections.Select(entry => new BookStructureEntryDto
+                {
+                    Title = entry.Title,
+                    PageNumber = entry.PageNumber,
+                    Level = entry.Level,
+                    ParentChapter = entry.ParentChapter
+                }).ToList()
+            };
         }
         catch (Exception ex)
         {

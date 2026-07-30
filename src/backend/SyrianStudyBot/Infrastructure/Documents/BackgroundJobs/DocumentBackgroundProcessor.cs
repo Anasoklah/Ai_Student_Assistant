@@ -1,105 +1,98 @@
-using Microsoft.Extensions.Logging;
-using SyrianStudyBot.Domain.Entities;
 using SyrianStudyBot.Domain.Enums;
 using SyrianStudyBot.Application.Documents.Dtos;
-using SyrianStudyBot.Application.Documents.Mappers;
-using SyrianStudyBot.Application.Chat;
 using SyrianStudyBot.Application.Documents;
-using SyrianStudyBot.Application.Payments;
-using SyrianStudyBot.Application.Quiz;
-using SyrianStudyBot.Application.Auth;
-using SyrianStudyBot.Application.Common;
-using SyrianStudyBot.Application.Rag;
-using SyrianStudyBot.Infrastructure.Documents.Validation;
+using SyrianStudyBot.Application.Documents.Validation;
 
 namespace SyrianStudyBot.Infrastructure.Documents.BackgroundJobs;
 
-public class DocumentProcessor : IDocumentProcessor
+/// <summary>
+/// Infrastructure worker that opens the temporary file and coordinates the
+/// application extraction and ingestion ports.
+/// </summary>
+public class DocumentBackgroundProcessor
 {
     private readonly IDocumentRepository _docRepo;
-    private readonly IExtractionService _extractionService;
-    private readonly IDocumentIngestionService _ingestion;
-    private readonly IDocumentIngestionValidator _validator;
-    private readonly ILogger<DocumentProcessor> _logger;
+    private readonly IDocumentContentExtractor _extractor;
+    private readonly IDocumentContentIngestionService _contentIngestionService;
+    private readonly IDocumentValidator _validator;
+    private readonly ILogger<DocumentBackgroundProcessor> _logger;
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".png", ".jpg", ".jpeg", ".webp"
     };
 
-    public DocumentProcessor(
+    public DocumentBackgroundProcessor(
         IDocumentRepository docRepo,
-        IExtractionService extractionService,
-        IDocumentIngestionService ingestion,
-        IDocumentIngestionValidator validator,
-        ILogger<DocumentProcessor> logger)
+        IDocumentContentExtractor extractor,
+        IDocumentContentIngestionService contentIngestionService,
+        IDocumentValidator validator,
+        ILogger<DocumentBackgroundProcessor> logger)
     {
         _docRepo = docRepo;
-        _extractionService = extractionService;
-        _ingestion = ingestion;
+        _extractor = extractor;
+        _contentIngestionService = contentIngestionService;
         _validator = validator;
         _logger = logger;
     }
 
-    public async Task ProcessAsync(DocumentProcessingJob job, CancellationToken ct = default)
+    public async Task ProcessAsync(DocumentProcessingRequest request, CancellationToken ct = default)
     {
-        var document = await _docRepo.GetByIdAsync(job.DocumentId, ct);
+        var document = await _docRepo.GetByIdAsync(request.DocumentId, ct);
         if (document is null)
         {
-            _logger.LogWarning("Document {Id} not found for processing", job.DocumentId);
+            _logger.LogWarning("Document {Id} not found for processing", request.DocumentId);
             return;
         }
 
         try
         {
-            await using var fileStream = new FileStream(job.TempFilePath, FileMode.Open, FileAccess.Read);
-            var ext = Path.GetExtension(job.FileName);
+            await using var fileStream = new FileStream(request.TempFilePath, FileMode.Open, FileAccess.Read);
+            var ext = Path.GetExtension(request.FileName);
 
             IReadOnlyList<ExtractedPageDto> pages;
             if (ImageExtensions.Contains(ext))
             {
-                pages = await ExtractImageAsync(fileStream, job.FileName, ct);
+                pages = await ExtractImageAsync(fileStream, request.FileName, ct);
             }
             else
             {
-                pages = await _extractionService.ExtractPagesAsync(
-                    fileStream, job.StartPage, job.EndPage, ct);
+                pages = await _extractor.ExtractPdfAsync(
+                    fileStream, request.StartPage, request.EndPage, ct);
             }
 
             BookStructureDto? structure = null;
-            if (job.TocPage.HasValue && ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            if (request.TocPage.HasValue && ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             {
-                structure = await ExtractStructureAsync(fileStream, job.TocPage.Value, job.TocPageEnd, ct);
+                // Page extraction above consumes/disposes fileStream (multipart upload),
+                // so open a fresh stream for structure extraction instead of reusing it.
+                await using var structureStream = new FileStream(request.TempFilePath, FileMode.Open, FileAccess.Read);
+                structure = await ExtractStructureAsync(structureStream, request.TocPage.Value, request.TocPageEnd, ct);
             }
 
-            var validationError = _validator.ValidateIngestionRequest(new DocumentIngestionCommand
-            {
-                Title = document.Title,
-                SourceName = document.SourceName,
-                Pages = pages
-            });
+            var validationError = _validator.ValidateExtractedContent(pages);
             if (validationError is not null)
             {
                 document.Status = DocumentStatus.Failed;
                 document.StatusMessage = validationError;
                 document.ProcessedAt = DateTime.UtcNow;
                 await _docRepo.SaveChangesAsync(ct);
-                _logger.LogWarning("Document {Id} failed validation: {Error}", job.DocumentId, validationError);
+                _logger.LogWarning("Document {Id} failed validation: {Error}", request.DocumentId, validationError);
                 return;
             }
 
-            await _ingestion.AttachExtractedContentAsync(document, pages, structure, ct);
+            await _contentIngestionService.AttachExtractedContentAsync(document, pages, structure, ct);
 
             document.Status = DocumentStatus.Ready;
             document.StatusMessage = null;
             document.ProcessedAt = DateTime.UtcNow;
             await _docRepo.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Document {Id} processed successfully", job.DocumentId);
+            _logger.LogInformation("Document {Id} processed successfully", request.DocumentId);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogWarning("Document {Id} processing was cancelled", job.DocumentId);
+            _logger.LogWarning("Document {Id} processing was cancelled", request.DocumentId);
             document.Status = DocumentStatus.Failed;
             document.StatusMessage = "Processing was cancelled";
             document.ProcessedAt = DateTime.UtcNow;
@@ -107,7 +100,7 @@ public class DocumentProcessor : IDocumentProcessor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process document {Id}", job.DocumentId);
+            _logger.LogError(ex, "Failed to process document {Id}", request.DocumentId);
             document.Status = DocumentStatus.Failed;
             document.StatusMessage = ex.Message;
             document.ProcessedAt = DateTime.UtcNow;
@@ -115,20 +108,21 @@ public class DocumentProcessor : IDocumentProcessor
         }
         finally
         {
-            TryDeleteTempFile(job.TempFilePath);
+            TryDeleteTempFile(request.TempFilePath);
         }
     }
 
     private async Task<IReadOnlyList<ExtractedPageDto>> ExtractImageAsync(
         Stream imageStream, string fileName, CancellationToken ct)
     {
-        var result = await _extractionService.ExtractImageAsync(imageStream, fileName, ct);
+        var result = await _extractor.ExtractImageAsync(imageStream, fileName, ct);
         return new List<ExtractedPageDto>
         {
             new()
             {
                 PageNumber = 1,
                 Text = string.Join("\n", result.Concepts.Select(c => $"{c.Title}\n{c.Content}")),
+                NeedsReview = result.NeedsReview,
                 Concepts = result.Concepts.Select(c => new ExtractedConceptDto
                 {
                     Title = c.Title,
@@ -145,8 +139,7 @@ public class DocumentProcessor : IDocumentProcessor
         try
         {
             pdfStream.Position = 0;
-            var result = await _extractionService.ExtractStructureAsync(pdfStream, tocPage, tocPageEnd, ct);
-            return result is not null ? DocumentMappers.ToBookStructureDto(result) : null;
+            return await _extractor.ExtractBookStructureAsync(pdfStream, tocPage, tocPageEnd, ct);
         }
         catch (Exception ex)
         {

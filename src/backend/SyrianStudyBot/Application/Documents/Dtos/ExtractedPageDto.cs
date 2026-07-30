@@ -14,4 +14,11 @@ public record ExtractedPageDto
 
     /// <summary>List of structured concepts identified on this page.</summary>
     public IReadOnlyList<ExtractedConceptDto> Concepts { get; init; } = [];
+
+    /// <summary>
+    /// True when no provider passed the AI service's quality validation and a
+    /// best-effort result was stored. Chunks built from this page inherit the
+    /// flag so low-confidence content can be reviewed or filtered later.
+    /// </summary>
+    public bool NeedsReview { get; init; }
 }

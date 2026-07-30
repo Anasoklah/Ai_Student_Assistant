@@ -6,17 +6,21 @@ Uses OCR-based TocParser first, falls back to AI providers in priority order for
 import json
 from typing import Optional
 from models.dto import DocumentStructure, TocEntry
+from services.provider_roles import provider_allows
 
+# FLOW OF FUNCTIONS:
+#
+# extract_structure (Public) -> Main entry point for book structure extraction.
+#   ├── _try_ocr_extraction (Private) -> Strategy 1: OCR on text.
+#   └── _try_vision_extraction_range (Private) -> Strategy 2: AI Vision fallback.
+#       └── _try_vision_extraction (Private)
+#           ├── _get_vision_providers (Private)
+#           ├── _build_toc_vision_prompt (Private)
+#           └── _parse_vision_response (Private)
 
 class StructureExtractor:
     """
     Extracts book structure (chapters/sections) from the Table of Contents page.
-    
-    Strategy:
-    1. Try OCR-based TocParser on extracted text (fast, free, no API cost)
-    2. If that fails, render the TOC page as image and try each AI provider
-       in the configured priority order (e.g. groq -> gemini -> openrouter)
-    3. Build a page_number -> (chapter, section) mapping for tagging during extraction
     """
     
     def __init__(self, pdf_service, gemini_service, groq_service, openrouter_service,
@@ -28,36 +32,25 @@ class StructureExtractor:
         self.toc_parser = toc_parser
         self.logger = logger
         self.config = config
-    
-    def _get_vision_providers(self):
-        """
-        Return ordered list of (provider_name, callable) for TOC vision extraction,
-        based on the configured PROVIDER_PRIORITY.
-        Each callable has signature: (prompt: str, image_bytes: bytes) -> str | None
-        """
-        providers = []
-        for provider_name in getattr(self.config, "PROVIDER_PRIORITY", ["groq", "gemini", "openrouter"]):
-            provider_name = provider_name.strip().lower()
-            if provider_name == "gemini":
-                providers.append(("gemini", self.gemini_service.call_with_prompt_and_image))
-            elif provider_name == "groq":
-                providers.append(("groq", self.groq_service.call_with_prompt_and_image))
-            elif provider_name == "openrouter":
-                providers.append(("openrouter", self.openrouter_service.call_with_prompt_and_image))
-        return providers
+
+    # --- PUBLIC METHODS ---
     
     def extract_structure(self, pdf_path: str, total_pages: int, toc_page: int, toc_page_end: int | None = None) -> Optional[DocumentStructure]:
+        """
+        Public entry point to extract the document structure.
+        Tries OCR first, then AI vision as a fallback.
+        """
         end_page = toc_page_end or toc_page
         self.logger.info(f"Extracting structure from TOC pages {toc_page}-{end_page}")
 
-        # Step 1: OCR path — concatenate text across the whole range first
+        # Step 1: OCR path
         structure = self._try_ocr_extraction(pdf_path, toc_page, end_page)
         if structure and structure.total_entries >= 2:
             structure.extraction_method = "toc_parser"
             self.logger.info(f"OCR extraction succeeded: {structure.total_entries} entries")
             return structure
 
-        # Step 2: Vision fallback — call provider per page, merge + dedupe
+        # Step 2: Vision fallback
         self.logger.info("OCR extraction insufficient, falling back to AI vision providers")
         structure = self._try_vision_extraction_range(pdf_path, toc_page, end_page)
         if structure and structure.total_entries >= 2:
@@ -67,10 +60,30 @@ class StructureExtractor:
 
         self.logger.warning("All structure extraction methods failed")
         return None
-    
+
+    # --- PRIVATE METHODS ---
+
+    def _get_vision_providers(self):
+        """
+        Return ordered list of (provider_name, callable) for TOC vision extraction.
+        """
+        providers = []
+        for provider_name in getattr(self.config, "PROVIDER_PRIORITY", ["groq", "gemini", "openrouter"]):
+            provider_name = provider_name.strip().lower()
+            if not provider_allows(self.config, provider_name, is_vision=True):
+                continue
+            if provider_name == "gemini":
+                providers.append(("gemini", self.gemini_service.call_with_prompt_and_image))
+            elif provider_name == "groq":
+                providers.append(("groq", self.groq_service.call_with_prompt_and_image))
+            elif provider_name == "openrouter":
+                providers.append(("openrouter", self.openrouter_service.call_with_prompt_and_image))
+        return providers
+
     def _try_ocr_extraction(self, pdf_path: str, toc_page_start: int, toc_page_end: int) -> Optional[DocumentStructure]:
-        """OCR path across a page range. Text is concatenated BEFORE parsing so
-        a chapter header on page N and its lessons on page N+1 are parsed as one block."""
+        """
+        Attempts to extract TOC entries using OCR'd text.
+        """
         try:
             import fitz
             doc = fitz.open(pdf_path)
@@ -104,14 +117,16 @@ class StructureExtractor:
         except Exception as e:
             self.logger.error(f"OCR extraction failed: {e}")
             return None
-     
+
     def _try_vision_extraction_range(self, pdf_path: str, toc_page_start: int, toc_page_end: int) -> Optional[DocumentStructure]:
-        """Vision fallback per page (each page is a separate image call), merged + deduped."""
+        """
+        Vision fallback per page (each page is a separate image call), merged + deduped.
+        """
         all_chapters, all_sections = [], []
         seen = set()  # (title, page_number) dedupe key
 
         for page_num in range(toc_page_start, toc_page_end + 1):
-            structure = self._try_vision_extraction(pdf_path, page_num)  # your existing single-page method, unchanged
+            structure = self._try_vision_extraction(pdf_path, page_num)
             if not structure:
                 continue
             for entry in structure.chapters + structure.sections:
@@ -128,13 +143,11 @@ class StructureExtractor:
         return DocumentStructure(
             chapters=all_chapters, sections=all_sections,
             total_entries=total, extraction_method="ai_fallback",
-        )   
-    
+        )
+
     def _try_vision_extraction(self, pdf_path: str, toc_page_num: int) -> Optional[DocumentStructure]:
         """
-        Try vision-based TOC extraction using AI providers in priority order.
-        Each provider's response is parsed and validated; only returns a structure
-        with >= 3 entries.
+        Try vision-based TOC extraction for a single page using AI providers.
         """
         image_bytes = self.pdf_service.render_page_as_image(pdf_path, toc_page_num)
         if not image_bytes:
@@ -172,14 +185,12 @@ class StructureExtractor:
         
         self.logger.warning("All vision providers failed to extract a valid TOC structure")
         return None
-    
+
     def _parse_vision_response(self, response_text: str, provider_name: str) -> Optional[DocumentStructure]:
         """Parse JSON from a vision provider response into a DocumentStructure."""
         try:
-            # Try to extract JSON from the response (handles markdown-wrapped JSON)
             text = response_text.strip()
             if text.startswith("```"):
-                # Extract from markdown code block
                 import re
                 match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
                 if match:
@@ -194,8 +205,6 @@ class StructureExtractor:
             for item in data.get("entries", []):
                 page_number = item.get("page_number")
                 if page_number is None:
-                    # AI models often return null for chapter headers that span
-                    # multiple pages. Skip these entries but log a warning.
                     self.logger.warning(
                         f"Entry '{item.get('title', '')}' has null page_number — skipping"
                     )
@@ -224,7 +233,7 @@ class StructureExtractor:
             self.logger.error(f"Failed to parse {provider_name} vision response: {e}")
             self.logger.error(f"Raw response: {response_text[:500]}")
             return None
-    
+
     def _build_toc_vision_prompt(self) -> str:
         """Build a specialized prompt for vision models to extract TOC structure."""
         return """

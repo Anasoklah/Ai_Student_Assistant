@@ -133,7 +133,7 @@ async def extract_image(
 
         manager.logger.info(f"Image received: {file.filename}, {len(image_bytes)} bytes, type: {file.content_type}")
 
-        result, provider_or_error = manager.extract_single_image(image_bytes)
+        result, provider_or_error, needs_review = manager.extract_single_image(image_bytes)
 
         if result is None or not result.success:
             manager.logger.error(f"Image extraction failed: {provider_or_error}")
@@ -147,6 +147,7 @@ async def extract_image(
             success=True,
             concepts=result.concepts,
             extraction_service=provider_or_error,
+            needs_review=needs_review,
         )
 
     except HTTPException:
